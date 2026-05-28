@@ -112,7 +112,6 @@ export default function CardList() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {games.map((game) => {
               const meta = gameMeta(game);
-              const setCount = setsForGame.length;
               return (
                 <button
                   key={game}
