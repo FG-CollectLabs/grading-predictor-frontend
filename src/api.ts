@@ -7,10 +7,13 @@ import type {
   CreateCardRequest,
   CreateCertRequest,
   CreateInspectionRequest,
+  GradedMarketData,
+  GemRateData,
 } from "./types";
 
 const BASE = import.meta.env.VITE_API_URL ?? "http://localhost:8084";
 const TOKEN = import.meta.env.VITE_API_TOKEN ?? "";
+const MARKET_BASE = import.meta.env.VITE_MARKET_API_URL ?? "https://market.futuregadgetlabs.com";
 
 function authHeaders(): HeadersInit {
   return TOKEN ? { Authorization: `Bearer ${TOKEN}` } : {};
@@ -48,6 +51,12 @@ async function patch<T>(path: string, body: unknown): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+async function marketGet<T>(path: string): Promise<T> {
+  const res = await fetch(`${MARKET_BASE}${path}`);
+  if (!res.ok) throw new Error(`market GET ${path}: ${res.status}`);
+  return res.json() as Promise<T>;
+}
+
 export const api = {
   listCards: () => get<Card[]>("/v1/cards"),
   getCard: (id: number) => get<CardDetail>(`/v1/cards/${id}`),
@@ -75,4 +84,10 @@ export const api = {
   createInspection: (certId: number, req: CreateInspectionRequest) =>
     post<InspectionRow>(`/v1/certs/${certId}/inspections`, req),
   listInspections: (certId: number) => get<InspectionRow[]>(`/v1/certs/${certId}/inspections`),
+
+  // Market tracker (read-only, no auth needed)
+  getGradedMarket: (displayKey: string) =>
+    marketGet<GradedMarketData>(`/v1/cards/${encodeURIComponent(displayKey)}/graded`),
+  getGemRate: (displayKey: string) =>
+    marketGet<GemRateData>(`/v1/cards/${encodeURIComponent(displayKey)}/gem-rate`),
 };

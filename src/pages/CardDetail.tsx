@@ -1,7 +1,15 @@
 import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { api } from "../api";
-import type { CardDetail as CardDetailType, CertRow, StatRow } from "../types";
+import type {
+  CardDetail as CardDetailType,
+  CertRow,
+  StatRow,
+  GradedMarketData,
+  GemRateData,
+  CertCategory,
+  CertPurpose,
+} from "../types";
 
 export default function CardDetail() {
   const { id } = useParams<{ id: string }>();
@@ -14,12 +22,27 @@ export default function CardDetail() {
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<"certs" | "buckets">("certs");
 
+  const [marketData, setMarketData] = useState<GradedMarketData | null>(null);
+  const [gemData, setGemData] = useState<GemRateData | null>(null);
+  const [marketLoading, setMarketLoading] = useState(false);
+
   useEffect(() => {
     Promise.all([api.getCard(cardId), api.listCertsForCard(cardId), api.getCardStats(cardId)])
       .then(([c, certsData, statsData]) => {
         setCard(c);
         setCerts(certsData ?? []);
         setStats(statsData ?? []);
+        // Fetch market data if linked
+        if (c.market_display_key) {
+          setMarketLoading(true);
+          Promise.all([
+            api.getGradedMarket(c.market_display_key).catch(() => null),
+            api.getGemRate(c.market_display_key).catch(() => null),
+          ]).then(([graded, gem]) => {
+            setMarketData(graded);
+            setGemData(gem);
+          }).finally(() => setMarketLoading(false));
+        }
       })
       .catch((e: unknown) => setError(String(e)))
       .finally(() => setLoading(false));
@@ -34,29 +57,40 @@ export default function CardDetail() {
 
   return (
     <div>
-      <div className="flex items-center gap-3 mb-6">
-        <Link to="/" className="text-muted hover:text-accent text-xs transition-colors">
-          ← All cards
-        </Link>
+      <div className="flex items-center gap-2 mb-6 text-xs text-muted">
+        <Link to="/" className="hover:text-accent transition-colors">← Games</Link>
+        <span className="text-border">/</span>
+        <span className="text-[#e6edf3]">{card.card_name}</span>
       </div>
 
-      <div className="bg-surface border border-border rounded-md p-5 mb-6">
+      {/* Card header */}
+      <div className="bg-surface border border-border rounded-md p-5 mb-4">
         <div className="flex items-start gap-4">
-          <div className="flex-1">
+          <CardArt card={card} />
+          <div className="flex-1 min-w-0">
             <h1 className="text-xl font-semibold">{card.card_name}</h1>
             <div className="text-muted text-sm mt-1">
               {card.set_name} · #{card.card_number} · {card.game}
             </div>
-          </div>
-          <div className="flex gap-3 text-sm">
-            <StatPill label="Total" value={certs.length} color="text-[#e6edf3]" />
-            <StatPill label="PSA 10" value={graded.filter((c) => c.grade_received === 10).length} color="text-green" />
-            <StatPill label="PSA 9" value={graded.filter((c) => c.grade_received === 9).length} color="text-yellow" />
-            <StatPill label="Pending" value={pending.length} color="text-muted" />
+            <div className="flex gap-3 mt-3 flex-wrap">
+              <StatPill label="Total" value={certs.length} color="text-[#e6edf3]" />
+              <StatPill label="PSA 10" value={graded.filter((c) => c.grade_received === 10).length} color="text-green" />
+              <StatPill label="PSA 9" value={graded.filter((c) => c.grade_received === 9).length} color="text-yellow" />
+              <StatPill label="Pending" value={pending.length} color="text-muted" />
+            </div>
           </div>
         </div>
       </div>
 
+      {/* Market data panel */}
+      <MarketPanel
+        displayKey={card.market_display_key}
+        marketData={marketData}
+        gemData={gemData}
+        loading={marketLoading}
+      />
+
+      {/* Tabs */}
       <div className="flex gap-1 border-b border-border mb-5">
         {(["certs", "buckets"] as const).map((t) => (
           <button
@@ -85,14 +119,177 @@ export default function CardDetail() {
   );
 }
 
+// ── Card art thumbnail ────────────────────────────────────────────────────────
+
+function CardArt({ card }: { card: CardDetailType }) {
+  const [failed, setFailed] = useState(false);
+  let imgUrl: string | null = card.image_url;
+  if (!imgUrl && card.game.toLowerCase() === "pokemon") {
+    const num = card.card_number.padStart(3, "0");
+    imgUrl = `https://images.pokemontcg.io/${card.set_code}/${num}.png`;
+  }
+
+  if (!imgUrl || failed) {
+    return (
+      <div className="w-24 h-32 bg-bg border border-border rounded flex items-center justify-center flex-shrink-0">
+        <span className="text-3xl text-border">◈</span>
+      </div>
+    );
+  }
+  return (
+    <img
+      src={imgUrl}
+      alt={card.card_name}
+      className="w-24 h-32 object-contain bg-bg rounded border border-border flex-shrink-0"
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
+// ── Market data panel ─────────────────────────────────────────────────────────
+
+function MarketPanel({
+  displayKey,
+  marketData,
+  gemData,
+  loading,
+}: {
+  displayKey: string | null;
+  marketData: GradedMarketData | null;
+  gemData: GemRateData | null;
+  loading: boolean;
+}) {
+  if (!displayKey) {
+    return (
+      <div className="bg-surface border border-border rounded-md px-4 py-3 mb-4 text-muted text-xs">
+        No market data linked. Set <code className="text-accent">market_display_key</code> on this card to pull gem rates and prices from the market tracker.
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="bg-surface border border-border rounded-md px-4 py-3 mb-4 text-muted text-xs">
+        Loading market data…
+      </div>
+    );
+  }
+
+  // Extract latest snapshot per (company, grade) from graded endpoint
+  const latestByKey = new Map<string, { marketCents: number | null; lastSaleCents: number | null }>();
+  if (marketData?.snapshots) {
+    for (const s of marketData.snapshots) {
+      const key = `${s.company}|${s.grade}`;
+      if (!latestByKey.has(key)) {
+        latestByKey.set(key, { marketCents: s.market_price_cents ?? null, lastSaleCents: s.last_sale_cents ?? null });
+      }
+    }
+  }
+
+  // Latest gem rate per company
+  const latestGem = new Map<string, number | null>();
+  if (gemData?.gem_rates) {
+    for (const g of gemData.gem_rates) {
+      if (!latestGem.has(g.company)) {
+        latestGem.set(g.company, g.gem_rate_pct ?? null);
+      }
+    }
+  }
+
+  const psa10Price = latestByKey.get("PSA|10") ?? latestByKey.get("PSA|PSA 10");
+  const psa9Price  = latestByKey.get("PSA|9")  ?? latestByKey.get("PSA|PSA 9");
+  const cgc10Price = latestByKey.get("CGC|10") ?? latestByKey.get("CGC|Pristine 10") ?? latestByKey.get("CGC|10");
+  const psaGemRate = latestGem.get("PSA");
+  const cgcGemRate = latestGem.get("CGC");
+
+  const hasAnyData = psa10Price || psa9Price || cgc10Price || psaGemRate !== undefined || cgcGemRate !== undefined;
+
+  if (!hasAnyData) {
+    return (
+      <div className="bg-surface border border-border rounded-md px-4 py-3 mb-4 text-muted text-xs">
+        Market tracker linked (<code className="text-accent">{displayKey}</code>) but no graded data yet.
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-surface border border-border rounded-md p-4 mb-4">
+      <div className="text-muted text-xs uppercase tracking-widest mb-3">Market Data</div>
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        {psaGemRate !== null && psaGemRate !== undefined && (
+          <MarketTile label="PSA Gem Rate" value={`${psaGemRate.toFixed(1)}%`} color="text-green" />
+        )}
+        {cgcGemRate !== null && cgcGemRate !== undefined && (
+          <MarketTile label="CGC Gem Rate" value={`${cgcGemRate.toFixed(1)}%`} color="text-green" />
+        )}
+        {psa10Price && <MarketTile label="PSA 10" value={formatCents(psa10Price.marketCents)} color="text-green" />}
+        {psa9Price  && <MarketTile label="PSA 9"  value={formatCents(psa9Price.marketCents)}  color="text-yellow" />}
+        {cgc10Price && <MarketTile label="CGC 10" value={formatCents(cgc10Price.marketCents)} color="text-blue-400" />}
+      </div>
+      <div className="text-[10px] text-muted mt-2">
+        via market tracker · <code>{displayKey}</code>
+      </div>
+    </div>
+  );
+}
+
+function formatCents(cents: number | null | undefined): string {
+  if (cents == null) return "—";
+  return `$${(cents / 100).toFixed(2)}`;
+}
+
+function MarketTile({ label, value, color }: { label: string; value: string; color: string }) {
+  return (
+    <div className="bg-bg border border-border rounded px-3 py-2">
+      <div className={`text-sm font-semibold ${color}`}>{value}</div>
+      <div className="text-[10px] text-muted">{label}</div>
+    </div>
+  );
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
 function StatPill({ label, value, color }: { label: string; value: number; color: string }) {
   return (
-    <div className="bg-bg border border-border rounded px-3 py-2 text-center min-w-16">
+    <div className="bg-bg border border-border rounded px-3 py-2 text-center min-w-14">
       <div className={`text-lg font-semibold ${color}`}>{value}</div>
       <div className="text-muted text-[10px]">{label}</div>
     </div>
   );
 }
+
+// ── Cert category / purpose display ──────────────────────────────────────────
+
+const CATEGORY_LABELS: Record<CertCategory, string> = {
+  raw:   "Raw",
+  psa9:  "PSA 9",
+  psa10: "PSA 10",
+  cgc9:  "CGC 9",
+  cgc10: "CGC 10",
+};
+
+const PURPOSE_LABELS: Record<CertPurpose, { label: string; color: string }> = {
+  analytics:        { label: "Analytics",  color: "text-muted" },
+  buy_and_grade:    { label: "Buy+Grade",  color: "text-accent" },
+  crack_and_regrade:{ label: "Crack+Regrade", color: "text-orange-400" },
+};
+
+function CategoryBadge({ category }: { category: CertCategory }) {
+  const colorMap: Record<CertCategory, string> = {
+    raw:   "text-muted border-border",
+    psa9:  "text-yellow border-yellow/30 bg-yellow/10",
+    psa10: "text-green border-green/30 bg-green/10",
+    cgc9:  "text-blue-400 border-blue-400/30 bg-blue-400/10",
+    cgc10: "text-blue-300 border-blue-300/30 bg-blue-300/10",
+  };
+  return (
+    <span className={`border rounded px-1.5 py-0.5 text-[10px] font-semibold whitespace-nowrap ${colorMap[category] ?? "text-muted border-border"}`}>
+      {CATEGORY_LABELS[category] ?? category}
+    </span>
+  );
+}
+
+// ── Cert table ────────────────────────────────────────────────────────────────
 
 function CertTable({ certs }: { certs: CertRow[] }) {
   if (certs.length === 0) {
@@ -104,19 +301,21 @@ function CertTable({ certs }: { certs: CertRow[] }) {
       <table className="w-full text-xs border-collapse">
         <thead>
           <tr className="border-b border-border text-muted text-left">
-            <th className="py-2 pr-4">Cert</th>
-            <th className="py-2 pr-4">Grade</th>
-            <th className="py-2 pr-4">Centering F</th>
-            <th className="py-2 pr-4">Surface</th>
-            <th className="py-2 pr-4">Corners</th>
-            <th className="py-2 pr-4">Edges</th>
-            <th className="py-2 pr-4">Source</th>
+            <th className="py-2 pr-3">Cert</th>
+            <th className="py-2 pr-3">Category</th>
+            <th className="py-2 pr-3">Purpose</th>
+            <th className="py-2 pr-3">Grade</th>
+            <th className="py-2 pr-3">Centering F</th>
+            <th className="py-2 pr-3">Surface</th>
+            <th className="py-2 pr-3">Corners</th>
+            <th className="py-2 pr-3">Edges</th>
+            <th className="py-2 pr-3">Source</th>
             <th className="py-2">Images</th>
           </tr>
         </thead>
         <tbody>
           {certs.map((cert) => (
-            <CertRow key={cert.id} cert={cert} />
+            <CertTableRow key={cert.id} cert={cert} />
           ))}
         </tbody>
       </table>
@@ -124,7 +323,7 @@ function CertTable({ certs }: { certs: CertRow[] }) {
   );
 }
 
-function CertRow({ cert }: { cert: CertRow }) {
+function CertTableRow({ cert }: { cert: CertRow }) {
   const gradeColor =
     cert.grade_received === 10
       ? "text-green"
@@ -143,26 +342,34 @@ function CertRow({ cert }: { cert: CertRow }) {
   const edges = [cert.edge_top, cert.edge_bottom, cert.edge_left, cert.edge_right];
   const worstEdge = worstOf(edges, ["nick", "heavy_wear", "light_wear", "clean"]);
 
+  const purposeInfo = PURPOSE_LABELS[cert.purpose as CertPurpose] ?? { label: cert.purpose, color: "text-muted" };
+
   return (
     <tr className="border-b border-[#1c2128] hover:bg-surface/50 transition-colors">
-      <td className="py-2 pr-4 font-mono">{cert.cert_number}</td>
-      <td className={`py-2 pr-4 font-semibold ${gradeColor}`}>
-        {cert.grade_received !== null ? `PSA ${cert.grade_received}` : "pending"}
+      <td className="py-2 pr-3 font-mono">{cert.cert_number}</td>
+      <td className="py-2 pr-3">
+        <CategoryBadge category={cert.category as CertCategory} />
       </td>
-      <td className="py-2 pr-4 text-muted font-mono">{center}</td>
-      <td className="py-2 pr-4">
+      <td className={`py-2 pr-3 ${purposeInfo.color}`}>{purposeInfo.label}</td>
+      <td className={`py-2 pr-3 font-semibold ${gradeColor}`}>
+        {cert.grade_received !== null
+          ? `${cert.grader} ${cert.grade_received}`
+          : "pending"}
+      </td>
+      <td className="py-2 pr-3 text-muted font-mono">{center}</td>
+      <td className="py-2 pr-3">
         <DefectTag value={cert.surface_front} />
         {cert.surface_back && cert.surface_back !== cert.surface_front && (
           <span className="text-muted ml-1">/ <DefectTag value={cert.surface_back} /></span>
         )}
       </td>
-      <td className="py-2 pr-4">
+      <td className="py-2 pr-3">
         <DefectTag value={worstCorner} />
       </td>
-      <td className="py-2 pr-4">
+      <td className="py-2 pr-3">
         <DefectTag value={worstEdge} />
       </td>
-      <td className="py-2 pr-4 text-muted">
+      <td className="py-2 pr-3 text-muted">
         {cert.inspection_source ? (
           <span className={cert.inspection_source === "auto" ? "text-purple" : "text-muted"}>
             {cert.inspection_source}
@@ -229,7 +436,6 @@ function DefectBuckets({ stats, total }: { stats: StatRow[]; total: number }) {
     );
   }
 
-  // Group stat rows into buckets
   const bucketMap = new Map<BucketKey, Bucket>();
   for (const row of stats) {
     const key = `${row.centering_bucket}|${row.surface_front}|${row.surface_back}`;

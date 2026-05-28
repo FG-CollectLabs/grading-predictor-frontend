@@ -9,6 +9,8 @@ export interface Card {
   cert_count: number;
   psa10_count: number;
   psa9_count: number;
+  image_url: string | null;
+  market_display_key: string | null;
 }
 
 export interface CardDetail {
@@ -19,6 +21,8 @@ export interface CardDetail {
   card_name: string;
   card_number: string;
   created_at: string;
+  image_url: string | null;
+  market_display_key: string | null;
 }
 
 export interface CertRow {
@@ -29,6 +33,8 @@ export interface CertRow {
   grade_received: number | null;
   graded_at: string | null;
   notes: string | null;
+  category: CertCategory;
+  purpose: CertPurpose;
   created_at: string;
   front_image: string | null;
   back_image: string | null;
@@ -82,6 +88,8 @@ export interface StatRow {
 export type SurfaceGrade = "clean" | "light_scratch" | "heavy_scratch" | "print_line" | "print_dot";
 export type CornerGrade = "sharp" | "light_wear" | "heavy_wear";
 export type EdgeGrade = "clean" | "light_wear" | "heavy_wear" | "nick";
+export type CertCategory = "raw" | "psa9" | "psa10" | "cgc9" | "cgc10";
+export type CertPurpose = "analytics" | "buy_and_grade" | "crack_and_regrade";
 
 export interface CreateCardRequest {
   game: string;
@@ -89,6 +97,8 @@ export interface CreateCardRequest {
   set_name: string;
   card_name: string;
   card_number: string;
+  image_url?: string;
+  market_display_key?: string;
 }
 
 export interface CreateCertRequest {
@@ -96,6 +106,8 @@ export interface CreateCertRequest {
   cert_number: string;
   grader?: string;
   notes?: string;
+  category?: CertCategory;
+  purpose?: CertPurpose;
 }
 
 export interface CreateInspectionRequest {
@@ -115,4 +127,36 @@ export interface CreateInspectionRequest {
   edge_right?: EdgeGrade | null;
   notes?: string;
   source?: "manual" | "auto";
+}
+
+// Market tracker types (from market.futuregadgetlabs.com)
+export interface GradedSnapshot {
+  company: string;
+  grade: string;
+  data_source: string;
+  week_start_date: string;
+  market_price_cents: number | null;
+  last_sale_cents: number | null;
+  pop_count: number | null;
+  pop_total: number | null;
+  gem_rate_pct: number | null;
+}
+
+export interface GradedMarketData {
+  display_key: string;
+  snapshots: GradedSnapshot[];
+}
+
+export interface GemRateRow {
+  company: string;
+  grade: string;
+  pop_count: number | null;
+  pop_total: number | null;
+  gem_rate_pct: number | null;
+  week: string;
+}
+
+export interface GemRateData {
+  display_key: string;
+  gem_rates: GemRateRow[];
 }

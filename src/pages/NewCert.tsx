@@ -7,6 +7,8 @@ import type {
   SurfaceGrade,
   CornerGrade,
   EdgeGrade,
+  CertCategory,
+  CertPurpose,
 } from "../types";
 
 type Step = "card" | "cert" | "inspection";
@@ -24,13 +26,18 @@ export default function NewCert() {
   const [saving, setSaving] = useState(false);
 
   // Card creation form
-  const [newCard, setNewCard] = useState({ game: "", set_code: "", set_name: "", card_name: "", card_number: "" });
+  const [newCard, setNewCard] = useState({
+    game: "", set_code: "", set_name: "", card_name: "", card_number: "",
+    image_url: "", market_display_key: "",
+  });
   const [cardMode, setCardMode] = useState<"existing" | "new">("existing");
 
   // Cert form
   const [certNumber, setCertNumber] = useState("");
   const [grader, setGrader] = useState("PSA");
   const [certNotes, setCertNotes] = useState("");
+  const [category, setCategory] = useState<CertCategory>("raw");
+  const [purpose, setPurpose] = useState<CertPurpose>("analytics");
   const [frontFile, setFrontFile] = useState<File | null>(null);
   const [backFile, setBackFile] = useState<File | null>(null);
 
@@ -45,7 +52,11 @@ export default function NewCert() {
     setError(null);
     try {
       if (cardMode === "new") {
-        const card = await api.createCard(newCard);
+        const card = await api.createCard({
+          ...newCard,
+          image_url: newCard.image_url || undefined,
+          market_display_key: newCard.market_display_key || undefined,
+        });
         setSelectedCardId(card.id);
       }
       setStep("cert");
@@ -68,6 +79,8 @@ export default function NewCert() {
         cert_number: certNumber.trim(),
         grader,
         notes: certNotes || undefined,
+        category,
+        purpose,
       });
       setCertId(cert.id);
 
@@ -164,6 +177,8 @@ export default function NewCert() {
               <Field label="Set Name" value={newCard.set_name} onChange={(v) => setNewCard((p) => ({ ...p, set_name: v }))} placeholder="Paldean Fates" className="col-span-2" />
               <Field label="Card Name" value={newCard.card_name} onChange={(v) => setNewCard((p) => ({ ...p, card_name: v }))} placeholder="Charizard ex" />
               <Field label="Card Number" value={newCard.card_number} onChange={(v) => setNewCard((p) => ({ ...p, card_number: v }))} placeholder="54" />
+              <Field label="Image URL (optional)" value={newCard.image_url} onChange={(v) => setNewCard((p) => ({ ...p, image_url: v }))} placeholder="https://…" className="col-span-2" />
+              <Field label="Market Display Key (optional)" value={newCard.market_display_key} onChange={(v) => setNewCard((p) => ({ ...p, market_display_key: v }))} placeholder="pokemon_sv4pt5_054" className="col-span-2" />
             </div>
           )}
 
@@ -196,6 +211,32 @@ export default function NewCert() {
               </select>
             </div>
             <Field label="Notes (optional)" value={certNotes} onChange={setCertNotes} placeholder="raw from binder" />
+            <div>
+              <label className="text-muted text-xs block mb-1">Category</label>
+              <select
+                value={category}
+                onChange={(e) => setCategory(e.target.value as CertCategory)}
+                className="w-full bg-bg border border-border rounded px-3 py-2 text-sm text-[#e6edf3] outline-none focus:border-accent"
+              >
+                <option value="raw">Raw</option>
+                <option value="psa9">PSA 9</option>
+                <option value="psa10">PSA 10</option>
+                <option value="cgc9">CGC 9</option>
+                <option value="cgc10">CGC 10</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-muted text-xs block mb-1">Purpose</label>
+              <select
+                value={purpose}
+                onChange={(e) => setPurpose(e.target.value as CertPurpose)}
+                className="w-full bg-bg border border-border rounded px-3 py-2 text-sm text-[#e6edf3] outline-none focus:border-accent"
+              >
+                <option value="analytics">Analytics</option>
+                <option value="buy_and_grade">Buy &amp; Grade</option>
+                <option value="crack_and_regrade">Crack &amp; Regrade</option>
+              </select>
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3 mb-5">
