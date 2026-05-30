@@ -531,6 +531,7 @@ function Field({
 function ImageDropZone({ label, onChange }: { label: string; onChange: (f: File | null) => void }) {
   const [preview, setPreview] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
+  const dragCounter = useRef(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
   function handleFile(f: File | null) {
@@ -543,8 +544,23 @@ function ImageDropZone({ label, onChange }: { label: string; onChange: (f: File 
     }
   }
 
+  function onDragEnter(e: React.DragEvent) {
+    e.preventDefault();
+    dragCounter.current++;
+    setDragging(true);
+  }
+
+  function onDragLeave() {
+    dragCounter.current--;
+    if (dragCounter.current <= 0) {
+      dragCounter.current = 0;
+      setDragging(false);
+    }
+  }
+
   function onDrop(e: React.DragEvent) {
     e.preventDefault();
+    dragCounter.current = 0;
     setDragging(false);
     const f = e.dataTransfer.files[0] ?? null;
     if (f?.type.startsWith("image/")) handleFile(f);
@@ -554,8 +570,9 @@ function ImageDropZone({ label, onChange }: { label: string; onChange: (f: File 
     <div>
       <label className="text-muted text-xs block mb-1">{label}</label>
       <div
-        onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
-        onDragLeave={() => setDragging(false)}
+        onDragEnter={onDragEnter}
+        onDragLeave={onDragLeave}
+        onDragOver={(e) => e.preventDefault()}
         onDrop={onDrop}
         onClick={() => inputRef.current?.click()}
         className={`cursor-pointer bg-bg border border-dashed rounded flex flex-col items-center justify-center min-h-[130px] p-2 transition-colors ${
@@ -570,9 +587,9 @@ function ImageDropZone({ label, onChange }: { label: string; onChange: (f: File 
           onChange={(e) => handleFile(e.target.files?.[0] ?? null)}
         />
         {preview ? (
-          <img src={preview} alt={label} className="max-h-[120px] object-contain rounded" />
+          <img src={preview} alt={label} className="max-h-[120px] object-contain rounded pointer-events-none" />
         ) : (
-          <span className="text-muted text-xs text-center">Drop image here<br />or click to browse</span>
+          <span className="text-muted text-xs text-center pointer-events-none">Drop image here<br />or click to browse</span>
         )}
       </div>
     </div>

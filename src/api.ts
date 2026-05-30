@@ -2,6 +2,7 @@ import type {
   Card,
   CardDetail,
   CertRow,
+  CertFullDetail,
   InspectionRow,
   StatRow,
   CreateCardRequest,
@@ -65,6 +66,7 @@ export const api = {
   createCard: (req: CreateCardRequest) => post<CardDetail>("/v1/cards", req),
 
   createCert: (req: CreateCertRequest) => post<{ id: number; cert_number: string }>("/v1/certs", req),
+  getCert: (id: number) => get<CertFullDetail>(`/v1/certs/${id}`),
   setCertGrade: (id: number, grade: number, graded_at?: string) =>
     patch<{ id: number }>(`/v1/certs/${id}/grade`, { grade, graded_at }),
 

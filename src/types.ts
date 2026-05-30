@@ -91,6 +91,21 @@ export type EdgeGrade = "clean" | "light_wear" | "heavy_wear" | "nick";
 export type CertCategory = "raw" | "psa9" | "psa10" | "cgc9" | "cgc10";
 export type CertPurpose = "analytics" | "buy_and_grade" | "crack_and_regrade";
 
+export interface CertFullDetail {
+  id: number;
+  card_id: number;
+  cert_number: string;
+  grader: string;
+  grade_received: number | null;
+  graded_at: string | null;
+  notes: string | null;
+  category: CertCategory;
+  purpose: CertPurpose;
+  created_at: string;
+  front_image: string | null;
+  back_image: string | null;
+}
+
 export interface CreateCardRequest {
   game: string;
   set_code: string;

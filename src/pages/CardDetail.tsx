@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import { api } from "../api";
 import type {
   CardDetail as CardDetailType,
@@ -306,11 +306,9 @@ function CertTable({ certs }: { certs: CertRow[] }) {
             <th className="py-2 pr-3">Purpose</th>
             <th className="py-2 pr-3">Grade</th>
             <th className="py-2 pr-3">Centering F</th>
-            <th className="py-2 pr-3">Surface</th>
-            <th className="py-2 pr-3">Corners</th>
-            <th className="py-2 pr-3">Edges</th>
-            <th className="py-2 pr-3">Source</th>
-            <th className="py-2">Images</th>
+            <th className="py-2 pr-3">Inspection</th>
+            <th className="py-2 pr-3">Images</th>
+            <th className="py-2"></th>
           </tr>
         </thead>
         <tbody>
@@ -324,6 +322,8 @@ function CertTable({ certs }: { certs: CertRow[] }) {
 }
 
 function CertTableRow({ cert }: { cert: CertRow }) {
+  const navigate = useNavigate();
+
   const gradeColor =
     cert.grade_received === 10
       ? "text-green"
@@ -336,17 +336,15 @@ function CertTableRow({ cert }: { cert: CertRow }) {
       ? `${cert.centering_front_lr}/${100 - cert.centering_front_lr} · ${cert.centering_front_tb}/${100 - cert.centering_front_tb}`
       : "—";
 
-  const corners = [cert.corner_tl, cert.corner_tr, cert.corner_bl, cert.corner_br];
-  const worstCorner = worstOf(corners, ["heavy_wear", "light_wear", "sharp"]);
-
-  const edges = [cert.edge_top, cert.edge_bottom, cert.edge_left, cert.edge_right];
-  const worstEdge = worstOf(edges, ["nick", "heavy_wear", "light_wear", "clean"]);
-
+  const hasInspection = cert.inspection_source !== null;
   const purposeInfo = PURPOSE_LABELS[cert.purpose as CertPurpose] ?? { label: cert.purpose, color: "text-muted" };
 
   return (
-    <tr className="border-b border-[#1c2128] hover:bg-surface/50 transition-colors">
-      <td className="py-2 pr-3 font-mono">{cert.cert_number}</td>
+    <tr
+      className="border-b border-[#1c2128] hover:bg-surface/50 transition-colors cursor-pointer"
+      onClick={() => navigate(`/certs/${cert.id}`)}
+    >
+      <td className="py-2 pr-3 font-mono text-accent hover:underline">{cert.cert_number}</td>
       <td className="py-2 pr-3">
         <CategoryBadge category={cert.category as CertCategory} />
       </td>
@@ -358,32 +356,21 @@ function CertTableRow({ cert }: { cert: CertRow }) {
       </td>
       <td className="py-2 pr-3 text-muted font-mono">{center}</td>
       <td className="py-2 pr-3">
-        <DefectTag value={cert.surface_front} />
-        {cert.surface_back && cert.surface_back !== cert.surface_front && (
-          <span className="text-muted ml-1">/ <DefectTag value={cert.surface_back} /></span>
-        )}
-      </td>
-      <td className="py-2 pr-3">
-        <DefectTag value={worstCorner} />
-      </td>
-      <td className="py-2 pr-3">
-        <DefectTag value={worstEdge} />
-      </td>
-      <td className="py-2 pr-3 text-muted">
-        {cert.inspection_source ? (
-          <span className={cert.inspection_source === "auto" ? "text-purple" : "text-muted"}>
+        {hasInspection ? (
+          <span className={cert.inspection_source === "auto" ? "text-purple-400" : "text-green"}>
             {cert.inspection_source}
           </span>
         ) : (
-          "—"
+          <span className="text-muted">—</span>
         )}
       </td>
-      <td className="py-2">
-        <div className="flex gap-1">
+      <td className="py-2 pr-3">
+        <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
           {cert.front_image && <ImageThumb label="F" path={cert.front_image} />}
           {cert.back_image && <ImageThumb label="B" path={cert.back_image} />}
         </div>
       </td>
+      <td className="py-2 text-muted hover:text-accent">→</td>
     </tr>
   );
 }

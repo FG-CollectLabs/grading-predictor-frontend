@@ -2,6 +2,7 @@ import { HashRouter, Routes, Route, Link } from "react-router-dom";
 import CardList from "./pages/CardList";
 import CardDetail from "./pages/CardDetail";
 import NewCert from "./pages/NewCert";
+import CertView from "./pages/CertView";
 
 export default function App() {
   return (
@@ -32,6 +33,7 @@ export default function App() {
             <Route path="/" element={<CardList />} />
             <Route path="/cards/:id" element={<CardDetail />} />
             <Route path="/certs/new" element={<NewCert />} />
+            <Route path="/certs/:id" element={<CertView />} />
           </Routes>
         </main>
       </div>
