@@ -115,16 +115,17 @@ export interface CreateInspectionRequest {
   centering_front_tb?: number | null;
   centering_back_lr?: number | null;
   centering_back_tb?: number | null;
-  surface_front?: SurfaceGrade | null;
-  surface_back?: SurfaceGrade | null;
-  corner_tl?: CornerGrade | null;
-  corner_tr?: CornerGrade | null;
-  corner_bl?: CornerGrade | null;
-  corner_br?: CornerGrade | null;
-  edge_top?: EdgeGrade | null;
-  edge_bottom?: EdgeGrade | null;
-  edge_left?: EdgeGrade | null;
-  edge_right?: EdgeGrade | null;
+  // Corners — count of affected corners (0–4) per severity
+  corners_defective_cut?: number | null;
+  corners_major_whitening?: number | null;
+  corners_minor_whitening?: number | null;
+  corners_micro_whitening?: number | null;
+  // Edges — count of whitening spots
+  edges_whitening?: number | null;
+  // Surface — counts per defect type
+  surface_dead_pixels?: number | null;
+  surface_dimples?: number | null;
+  surface_print_lines?: number | null;
   notes?: string;
   source?: "manual" | "auto";
 }

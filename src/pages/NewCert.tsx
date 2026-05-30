@@ -1,12 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "../api";
 import type {
   Card,
   CreateInspectionRequest,
-  SurfaceGrade,
-  CornerGrade,
-  EdgeGrade,
   CertCategory,
   CertPurpose,
 } from "../types";
@@ -84,7 +81,6 @@ export default function NewCert() {
       });
       setCertId(cert.id);
 
-      // Upload images in parallel
       await Promise.all([
         frontFile ? api.uploadCertImage(cert.id, "front", frontFile) : Promise.resolve(),
         backFile ? api.uploadCertImage(cert.id, "back", backFile) : Promise.resolve(),
@@ -240,8 +236,8 @@ export default function NewCert() {
           </div>
 
           <div className="grid grid-cols-2 gap-3 mb-5">
-            <ImageUpload label="Front scan" onChange={setFrontFile} />
-            <ImageUpload label="Back scan" onChange={setBackFile} />
+            <ImageDropZone label="Front scan" onChange={setFrontFile} />
+            <ImageDropZone label="Back scan" onChange={setBackFile} />
           </div>
 
           <button
@@ -274,88 +270,141 @@ function InspectionForm({
 }) {
   const [form, setForm] = useState<CreateInspectionRequest>({
     source: "manual",
+    centering_front_lr: 50,
+    centering_front_tb: 50,
+    centering_back_lr: 50,
+    centering_back_tb: 50,
+    corners_defective_cut: 0,
+    corners_major_whitening: 0,
+    corners_minor_whitening: 0,
+    corners_micro_whitening: 0,
+    edges_whitening: 0,
+    surface_dead_pixels: 0,
+    surface_dimples: 0,
+    surface_print_lines: 0,
   });
 
-  function setField<K extends keyof CreateInspectionRequest>(key: K, value: CreateInspectionRequest[K]) {
+  function setNum(key: keyof CreateInspectionRequest, value: number) {
     setForm((p) => ({ ...p, [key]: value }));
   }
 
-  function numField(key: keyof CreateInspectionRequest, label: string) {
-    const val = form[key] as number | null | undefined;
-    return (
-      <div>
-        <label className="text-muted text-xs block mb-1">{label}</label>
-        <input
-          type="number"
-          min={0}
-          max={100}
-          value={val ?? ""}
-          onChange={(e) => setField(key, e.target.value ? Number(e.target.value) as never : null as never)}
-          placeholder="50"
-          className="w-full bg-bg border border-border rounded px-3 py-1.5 text-sm text-[#e6edf3] outline-none focus:border-accent"
-        />
-      </div>
-    );
-  }
-
-  const surfaceOpts: SurfaceGrade[] = ["clean", "light_scratch", "heavy_scratch", "print_line", "print_dot"];
-  const cornerOpts: CornerGrade[] = ["sharp", "light_wear", "heavy_wear"];
-  const edgeOpts: EdgeGrade[] = ["clean", "light_wear", "heavy_wear", "nick"];
-
   return (
-    <div className="bg-surface border border-border rounded-md p-5">
-      <h2 className="font-semibold mb-4">3. Defect Inspection</h2>
+    <div className="bg-surface border border-border rounded-md p-5 space-y-6">
+      <h2 className="font-semibold">3. Defect Inspection</h2>
 
-      <section className="mb-5">
-        <div className="text-muted text-xs uppercase tracking-widest mb-3">Centering — Front (% of left / top border)</div>
-        <div className="grid grid-cols-2 gap-3">
-          {numField("centering_front_lr", "Left %")}
-          {numField("centering_front_tb", "Top %")}
+      {/* Centering */}
+      <section>
+        <SectionHeader>Centering</SectionHeader>
+        <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+          <div className="space-y-3">
+            <div className="text-xs text-muted mb-2 uppercase tracking-widest">Front</div>
+            <CenteringSlider
+              label="L / R"
+              value={form.centering_front_lr ?? 50}
+              onChange={(v) => setNum("centering_front_lr", v)}
+            />
+            <CenteringSlider
+              label="T / B"
+              value={form.centering_front_tb ?? 50}
+              onChange={(v) => setNum("centering_front_tb", v)}
+            />
+          </div>
+          <div className="space-y-3">
+            <div className="text-xs text-muted mb-2 uppercase tracking-widest">Back</div>
+            <CenteringSlider
+              label="L / R"
+              value={form.centering_back_lr ?? 50}
+              onChange={(v) => setNum("centering_back_lr", v)}
+            />
+            <CenteringSlider
+              label="T / B"
+              value={form.centering_back_tb ?? 50}
+              onChange={(v) => setNum("centering_back_tb", v)}
+            />
+          </div>
         </div>
       </section>
 
-      <section className="mb-5">
-        <div className="text-muted text-xs uppercase tracking-widest mb-3">Centering — Back</div>
-        <div className="grid grid-cols-2 gap-3">
-          {numField("centering_back_lr", "Left %")}
-          {numField("centering_back_tb", "Top %")}
+      {/* Corners */}
+      <section>
+        <SectionHeader>Corners</SectionHeader>
+        <div className="space-y-3">
+          <CountSlider
+            label="Defective cuts"
+            description="imperfect corner geometry"
+            value={form.corners_defective_cut ?? 0}
+            max={4}
+            onChange={(v) => setNum("corners_defective_cut", v)}
+          />
+          <CountSlider
+            label="Major whitening"
+            description="immediately noticeable, stands out"
+            value={form.corners_major_whitening ?? 0}
+            max={4}
+            onChange={(v) => setNum("corners_major_whitening", v)}
+          />
+          <CountSlider
+            label="Minor whitening"
+            description="noticeable on close inspection"
+            value={form.corners_minor_whitening ?? 0}
+            max={4}
+            onChange={(v) => setNum("corners_minor_whitening", v)}
+          />
+          <CountSlider
+            label="Micro whitening"
+            description="requires loupe, not obvious at a glance"
+            value={form.corners_micro_whitening ?? 0}
+            max={4}
+            onChange={(v) => setNum("corners_micro_whitening", v)}
+          />
         </div>
       </section>
 
-      <section className="mb-5">
-        <div className="text-muted text-xs uppercase tracking-widest mb-3">Surface</div>
-        <div className="grid grid-cols-2 gap-3">
-          <SelectField label="Front" opts={surfaceOpts} value={form.surface_front ?? null} onChange={(v) => setField("surface_front", v as SurfaceGrade)} />
-          <SelectField label="Back"  opts={surfaceOpts} value={form.surface_back ?? null}  onChange={(v) => setField("surface_back",  v as SurfaceGrade)} />
+      {/* Edges */}
+      <section>
+        <SectionHeader>Edges</SectionHeader>
+        <div className="space-y-3">
+          <CountSlider
+            label="Whitening"
+            value={form.edges_whitening ?? 0}
+            max={10}
+            onChange={(v) => setNum("edges_whitening", v)}
+          />
         </div>
       </section>
 
-      <section className="mb-5">
-        <div className="text-muted text-xs uppercase tracking-widest mb-3">Corners</div>
-        <div className="grid grid-cols-2 gap-3">
-          <SelectField label="Top-Left"     opts={cornerOpts} value={form.corner_tl ?? null} onChange={(v) => setField("corner_tl", v as CornerGrade)} />
-          <SelectField label="Top-Right"    opts={cornerOpts} value={form.corner_tr ?? null} onChange={(v) => setField("corner_tr", v as CornerGrade)} />
-          <SelectField label="Bottom-Left"  opts={cornerOpts} value={form.corner_bl ?? null} onChange={(v) => setField("corner_bl", v as CornerGrade)} />
-          <SelectField label="Bottom-Right" opts={cornerOpts} value={form.corner_br ?? null} onChange={(v) => setField("corner_br", v as CornerGrade)} />
+      {/* Surface */}
+      <section>
+        <SectionHeader>Surface</SectionHeader>
+        <div className="space-y-3">
+          <CountSlider
+            label="Dead pixels"
+            value={form.surface_dead_pixels ?? 0}
+            max={20}
+            onChange={(v) => setNum("surface_dead_pixels", v)}
+          />
+          <CountSlider
+            label="Dimples"
+            value={form.surface_dimples ?? 0}
+            max={10}
+            onChange={(v) => setNum("surface_dimples", v)}
+          />
+          <CountSlider
+            label="Print lines"
+            value={form.surface_print_lines ?? 0}
+            max={10}
+            onChange={(v) => setNum("surface_print_lines", v)}
+          />
         </div>
       </section>
 
-      <section className="mb-5">
-        <div className="text-muted text-xs uppercase tracking-widest mb-3">Edges</div>
-        <div className="grid grid-cols-2 gap-3">
-          <SelectField label="Top"    opts={edgeOpts} value={form.edge_top    ?? null} onChange={(v) => setField("edge_top",    v as EdgeGrade)} />
-          <SelectField label="Bottom" opts={edgeOpts} value={form.edge_bottom ?? null} onChange={(v) => setField("edge_bottom", v as EdgeGrade)} />
-          <SelectField label="Left"   opts={edgeOpts} value={form.edge_left   ?? null} onChange={(v) => setField("edge_left",   v as EdgeGrade)} />
-          <SelectField label="Right"  opts={edgeOpts} value={form.edge_right  ?? null} onChange={(v) => setField("edge_right",  v as EdgeGrade)} />
-        </div>
-      </section>
-
-      <div className="mb-5">
+      {/* Notes */}
+      <div>
         <label className="text-muted text-xs block mb-1">Notes</label>
         <textarea
           rows={2}
           value={form.notes ?? ""}
-          onChange={(e) => setField("notes", e.target.value || undefined)}
+          onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value || undefined }))}
           placeholder="any additional observations…"
           className="w-full bg-bg border border-border rounded px-3 py-2 text-sm text-[#e6edf3] placeholder-muted outline-none focus:border-accent resize-none"
         />
@@ -383,6 +432,79 @@ function InspectionForm({
 
 // ── Shared form components ────────────────────────────────────────────────────
 
+function SectionHeader({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="text-muted text-xs uppercase tracking-widest mb-3">{children}</div>
+  );
+}
+
+function CenteringSlider({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  onChange: (v: number) => void;
+}) {
+  const a = value;
+  const b = 100 - value;
+  const offCenter = Math.abs(50 - value);
+  const color = offCenter >= 10 ? "text-yellow-400" : "text-[#e6edf3]";
+  return (
+    <div>
+      <div className="flex justify-between text-xs mb-1">
+        <span className="text-muted">{label}</span>
+        <span className={`font-mono font-semibold ${color}`}>{a} / {b}</span>
+      </div>
+      <input
+        type="range"
+        min={0}
+        max={100}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="w-full accent-[#58a6ff]"
+      />
+    </div>
+  );
+}
+
+function CountSlider({
+  label,
+  description,
+  value,
+  max,
+  onChange,
+}: {
+  label: string;
+  description?: string;
+  value: number;
+  max: number;
+  onChange: (v: number) => void;
+}) {
+  return (
+    <div>
+      <div className="flex justify-between text-xs mb-1">
+        <div className="flex items-baseline gap-1.5">
+          <span className="text-[#e6edf3]">{label}</span>
+          {description && <span className="text-muted text-[11px]">{description}</span>}
+        </div>
+        <span className={`font-mono font-semibold tabular-nums ${value > 0 ? "text-accent" : "text-muted"}`}>
+          {value}
+        </span>
+      </div>
+      <input
+        type="range"
+        min={0}
+        max={max}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="w-full accent-[#58a6ff]"
+      />
+    </div>
+  );
+}
+
 function Field({
   label, value, onChange, placeholder, className = "",
 }: {
@@ -406,49 +528,53 @@ function Field({
   );
 }
 
-function SelectField({
-  label, opts, value, onChange,
-}: {
-  label: string;
-  opts: string[];
-  value: string | null;
-  onChange: (v: string) => void;
-}) {
-  return (
-    <div>
-      <label className="text-muted text-xs block mb-1">{label}</label>
-      <select
-        value={value ?? ""}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-full bg-bg border border-border rounded px-3 py-2 text-sm text-[#e6edf3] outline-none focus:border-accent"
-      >
-        <option value="">—</option>
-        {opts.map((o) => (
-          <option key={o} value={o}>{o.replace(/_/g, " ")}</option>
-        ))}
-      </select>
-    </div>
-  );
-}
+function ImageDropZone({ label, onChange }: { label: string; onChange: (f: File | null) => void }) {
+  const [preview, setPreview] = useState<string | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
 
-function ImageUpload({ label, onChange }: { label: string; onChange: (f: File | null) => void }) {
-  const [name, setName] = useState<string | null>(null);
+  function handleFile(f: File | null) {
+    onChange(f);
+    if (f) {
+      const url = URL.createObjectURL(f);
+      setPreview((prev) => { if (prev) URL.revokeObjectURL(prev); return url; });
+    } else {
+      setPreview(null);
+    }
+  }
+
+  function onDrop(e: React.DragEvent) {
+    e.preventDefault();
+    setDragging(false);
+    const f = e.dataTransfer.files[0] ?? null;
+    if (f?.type.startsWith("image/")) handleFile(f);
+  }
+
   return (
     <div>
       <label className="text-muted text-xs block mb-1">{label}</label>
-      <label className="flex items-center gap-2 cursor-pointer bg-bg border border-border border-dashed rounded px-3 py-3 hover:border-accent transition-colors">
+      <div
+        onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={onDrop}
+        onClick={() => inputRef.current?.click()}
+        className={`cursor-pointer bg-bg border border-dashed rounded flex flex-col items-center justify-center min-h-[130px] p-2 transition-colors ${
+          dragging ? "border-accent bg-accent/5" : "border-border hover:border-accent/50"
+        }`}
+      >
         <input
+          ref={inputRef}
           type="file"
           accept="image/*"
           className="sr-only"
-          onChange={(e) => {
-            const f = e.target.files?.[0] ?? null;
-            onChange(f);
-            setName(f?.name ?? null);
-          }}
+          onChange={(e) => handleFile(e.target.files?.[0] ?? null)}
         />
-        <span className="text-muted text-xs">{name ?? "Choose image…"}</span>
-      </label>
+        {preview ? (
+          <img src={preview} alt={label} className="max-h-[120px] object-contain rounded" />
+        ) : (
+          <span className="text-muted text-xs text-center">Drop image here<br />or click to browse</span>
+        )}
+      </div>
     </div>
   );
 }
