@@ -66,6 +66,7 @@ export const api = {
   getCardStats: (id: number) => get<StatRow[]>(`/v1/cards/${id}/stats`),
   listCertsForCard: (id: number) => get<CertRow[]>(`/v1/cards/${id}/certs`),
   createCard: (req: CreateCardRequest) => post<CardDetail>("/v1/cards", req),
+  patchCard: (id: number, req: CreateCardRequest) => patch<CardDetail>(`/v1/cards/${id}`, req),
   deleteCard: async (id: number) => {
     const res = await fetch(`${BASE}/v1/cards/${id}`, {
       method: "DELETE",
@@ -85,6 +86,8 @@ export const api = {
     return res.json();
   },
 
+  checkCertNumber: (certNumber: string) =>
+    get<{ exists: boolean; cert_id?: number; card_id?: number; grader?: string; category?: string }>(`/v1/certs/check?cert_number=${encodeURIComponent(certNumber)}`),
   createCert: (req: CreateCertRequest) => post<{ id: number; cert_number: string }>("/v1/certs", req),
   getCert: (id: number) => get<CertFullDetail>(`/v1/certs/${id}`),
   deleteCert: async (id: number) => {

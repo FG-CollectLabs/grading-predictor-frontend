@@ -25,6 +25,11 @@ export default function CardDetail() {
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
+  const [editing, setEditing] = useState(false);
+  const [editForm, setEditForm] = useState<{ game: string; set_code: string; set_name: string; card_name: string; card_number: string; image_url: string; market_display_key: string } | null>(null);
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+
   const [marketData, setMarketData] = useState<GradedMarketData | null>(null);
   const [gemData, setGemData] = useState<GemRateData | null>(null);
   const [marketLoading, setMarketLoading] = useState(false);
@@ -63,6 +68,45 @@ export default function CardDetail() {
     }
   }
 
+  function startEdit() {
+    if (!card) return;
+    setEditForm({
+      game: card.game,
+      set_code: card.set_code,
+      set_name: card.set_name,
+      card_name: card.card_name,
+      card_number: card.card_number,
+      image_url: card.image_url ?? "",
+      market_display_key: card.market_display_key ?? "",
+    });
+    setEditError(null);
+    setEditing(true);
+  }
+
+  async function submitEdit() {
+    if (!editForm) return;
+    setEditSaving(true);
+    setEditError(null);
+    try {
+      const updated = await api.patchCard(cardId, {
+        game: editForm.game,
+        set_code: editForm.set_code,
+        set_name: editForm.set_name,
+        card_name: editForm.card_name,
+        card_number: editForm.card_number,
+        image_url: editForm.image_url || undefined,
+        market_display_key: editForm.market_display_key || undefined,
+      });
+      setCard(updated);
+      setEditing(false);
+      setEditForm(null);
+    } catch (e) {
+      setEditError(String(e));
+    } finally {
+      setEditSaving(false);
+    }
+  }
+
   if (loading) return <div className="text-muted py-12 text-center">Loading…</div>;
   if (error) return <div className="text-red-400 py-12 text-center">{error}</div>;
   if (!card) return null;
@@ -80,48 +124,67 @@ export default function CardDetail() {
 
       {/* Card header */}
       <div className="bg-surface border border-border rounded-md p-5 mb-4">
-        <div className="flex items-start gap-4">
-          <CardArt card={card} />
-          <div className="flex-1 min-w-0">
-            <div className="flex items-start justify-between gap-2">
-              <h1 className="text-xl font-semibold">{card.card_name}</h1>
-              {!confirmDelete ? (
-                <button
-                  onClick={() => setConfirmDelete(true)}
-                  className="text-[10px] text-muted hover:text-red-400 border border-transparent hover:border-red-400/30 rounded px-2 py-1 transition-colors whitespace-nowrap"
-                >
-                  Delete card
-                </button>
-              ) : (
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] text-red-400">Delete?</span>
+        {editing && editForm ? (
+          <EditCardForm
+            form={editForm}
+            onChange={(p) => setEditForm((f) => f ? { ...f, ...p } : f)}
+            onSave={submitEdit}
+            onCancel={() => { setEditing(false); setEditForm(null); setEditError(null); }}
+            saving={editSaving}
+            error={editError}
+          />
+        ) : (
+          <div className="flex items-start gap-4">
+            <CardArt card={card} />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-start justify-between gap-2">
+                <h1 className="text-xl font-semibold">{card.card_name}</h1>
+                <div className="flex items-center gap-2 flex-shrink-0">
                   <button
-                    onClick={handleDelete}
-                    disabled={deleting}
-                    className="text-[10px] bg-red-500/20 text-red-400 border border-red-400/40 rounded px-2 py-1 hover:bg-red-500/30 transition-colors disabled:opacity-50"
+                    onClick={startEdit}
+                    className="text-[10px] text-muted hover:text-accent border border-transparent hover:border-accent/30 rounded px-2 py-1 transition-colors whitespace-nowrap"
                   >
-                    {deleting ? "Deleting…" : "Yes, delete"}
+                    Edit card
                   </button>
-                  <button
-                    onClick={() => setConfirmDelete(false)}
-                    className="text-[10px] text-muted hover:text-[#e6edf3] border border-border rounded px-2 py-1 transition-colors"
-                  >
-                    Cancel
-                  </button>
+                  {!confirmDelete ? (
+                    <button
+                      onClick={() => setConfirmDelete(true)}
+                      className="text-[10px] text-muted hover:text-red-400 border border-transparent hover:border-red-400/30 rounded px-2 py-1 transition-colors whitespace-nowrap"
+                    >
+                      Delete card
+                    </button>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-red-400">Delete?</span>
+                      <button
+                        onClick={handleDelete}
+                        disabled={deleting}
+                        className="text-[10px] bg-red-500/20 text-red-400 border border-red-400/40 rounded px-2 py-1 hover:bg-red-500/30 transition-colors disabled:opacity-50"
+                      >
+                        {deleting ? "Deleting…" : "Yes, delete"}
+                      </button>
+                      <button
+                        onClick={() => setConfirmDelete(false)}
+                        className="text-[10px] text-muted hover:text-[#e6edf3] border border-border rounded px-2 py-1 transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-            <div className="text-muted text-sm mt-1">
-              {card.set_name} · #{card.card_number} · {card.game}
-            </div>
-            <div className="flex gap-3 mt-3 flex-wrap">
-              <StatPill label="Total" value={certs.length} color="text-[#e6edf3]" />
-              <StatPill label="PSA 10" value={graded.filter((c) => c.grade_received === 10).length} color="text-green" />
-              <StatPill label="PSA 9" value={graded.filter((c) => c.grade_received === 9).length} color="text-yellow" />
-              <StatPill label="Pending" value={pending.length} color="text-muted" />
+              </div>
+              <div className="text-muted text-sm mt-1">
+                {card.set_name} · #{card.card_number} · {card.game}
+              </div>
+              <div className="flex gap-3 mt-3 flex-wrap">
+                <StatPill label="Total" value={certs.length} color="text-[#e6edf3]" />
+                <StatPill label="PSA 10" value={graded.filter((c) => c.grade_received === 10).length} color="text-green" />
+                <StatPill label="PSA 9" value={graded.filter((c) => c.grade_received === 9).length} color="text-yellow" />
+                <StatPill label="Pending" value={pending.length} color="text-muted" />
+              </div>
             </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* Market data panel */}
@@ -535,6 +598,77 @@ function BucketCard({ bucket }: { bucket: Bucket }) {
             style={{ width: `${pct10}%` }}
           />
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Edit card form ────────────────────────────────────────────────────────────
+
+type EditCardForm = { game: string; set_code: string; set_name: string; card_name: string; card_number: string; image_url: string; market_display_key: string };
+
+function EditCardForm({
+  form, onChange, onSave, onCancel, saving, error,
+}: {
+  form: EditCardForm;
+  onChange: (p: Partial<EditCardForm>) => void;
+  onSave: () => void;
+  onCancel: () => void;
+  saving: boolean;
+  error: string | null;
+}) {
+  const input = "w-full bg-bg border border-border rounded px-3 py-1.5 text-sm text-[#e6edf3] outline-none focus:border-accent";
+  const label = "text-muted text-xs block mb-1";
+
+  return (
+    <div className="space-y-4">
+      <div className="text-sm font-semibold">Edit Card</div>
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className={label}>Game</label>
+          <select className={input} value={form.game} onChange={(e) => onChange({ game: e.target.value })}>
+            <option value="pokemon">Pokémon</option>
+            <option value="magic">Magic: The Gathering</option>
+            <option value="weiss">Weiss Schwarz</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+        <div>
+          <label className={label}>Set Code</label>
+          <input className={input} value={form.set_code} onChange={(e) => onChange({ set_code: e.target.value })} placeholder="e.g. sv6" />
+        </div>
+        <div className="col-span-2">
+          <label className={label}>Set Name</label>
+          <input className={input} value={form.set_name} onChange={(e) => onChange({ set_name: e.target.value })} />
+        </div>
+        <div>
+          <label className={label}>Card Name</label>
+          <input className={input} value={form.card_name} onChange={(e) => onChange({ card_name: e.target.value })} />
+        </div>
+        <div>
+          <label className={label}>Card Number</label>
+          <input className={input} value={form.card_number} onChange={(e) => onChange({ card_number: e.target.value })} />
+        </div>
+        <div className="col-span-2">
+          <label className={label}>Image URL</label>
+          <input className={input} value={form.image_url} onChange={(e) => onChange({ image_url: e.target.value })} placeholder="https://…" />
+          <div className="text-[10px] text-muted mt-1">Pokémon cards auto-load from pokemontcg.io — leave blank to use that.</div>
+        </div>
+        <div className="col-span-2">
+          <label className={label}>Market Display Key</label>
+          <input className={input} value={form.market_display_key} onChange={(e) => onChange({ market_display_key: e.target.value })} placeholder="optional — links to market tracker" />
+        </div>
+      </div>
+      {error && <div className="text-red-400 text-xs">{error}</div>}
+      <div className="flex gap-2">
+        <button onClick={onSave} disabled={saving}
+          className="bg-accent text-bg font-semibold px-4 py-1.5 rounded text-sm hover:bg-accent/90 disabled:opacity-40 transition-colors">
+          {saving ? "Saving…" : "Save"}
+        </button>
+        <button onClick={onCancel} disabled={saving}
+          className="text-muted hover:text-[#e6edf3] border border-border rounded px-4 py-1.5 text-sm transition-colors">
+          Cancel
+        </button>
       </div>
     </div>
   );

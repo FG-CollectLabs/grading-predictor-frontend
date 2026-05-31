@@ -295,7 +295,17 @@ export function CenteringTool({
 
   // ── Crop application ──────────────────────────────────────────────────────
   async function applyCrop() {
-    if (!origImage) { setMode("lines"); return; }
+    const advanceAfter = () => {
+      // After cropping front, auto-advance to crop back if it hasn't been cropped yet.
+      // onImgLoad for the back image will call fitImage, so don't call it here.
+      if (side === "front" && backImage && !backCropped) {
+        setSide("back");
+      } else {
+        setMode("lines");
+      }
+    };
+
+    if (!origImage) { advanceAfter(); return; }
     const img = new Image();
     img.src = origImage;
     if (!img.complete) await new Promise<void>((res) => { img.onload = () => res(); img.onerror = () => res(); });
@@ -305,15 +315,24 @@ export function CenteringTool({
     const cy = Math.max(0, Math.round(crop.y1 * nh));
     const cw = Math.min(nw - cx, Math.round((crop.x2 - crop.x1) * nw));
     const ch = Math.min(nh - cy, Math.round((crop.y2 - crop.y1) * nh));
-    if (cw < 4 || ch < 4) { setMode("lines"); return; }
+    if (cw < 4 || ch < 4) { advanceAfter(); return; }
 
     const canvas = document.createElement("canvas");
     canvas.width = cw; canvas.height = ch;
     canvas.getContext("2d")!.drawImage(img, cx, cy, cw, ch, 0, 0, cw, ch);
     const url = canvas.toDataURL("image/jpeg", 0.95);
 
-    if (side === "front") { setFrontCropped(url); setFrontNat({ w: cw, h: ch }); }
-    else                  { setBackCropped(url);  setBackNat({ w: cw, h: ch }); }
+    if (side === "front") {
+      setFrontCropped(url);
+      setFrontNat({ w: cw, h: ch });
+      if (backImage && !backCropped) {
+        setSide("back"); // onImgLoad handles fitImage
+        return;
+      }
+    } else {
+      setBackCropped(url);
+      setBackNat({ w: cw, h: ch });
+    }
 
     fitImage(cw, ch);
     setMode("lines");
@@ -382,7 +401,9 @@ export function CenteringTool({
         {mode === "crop" ? (
           <>
             <button onClick={() => setMode("lines")} className="px-3 py-1 text-xs border border-border text-muted rounded hover:border-[#8b949e] transition-colors">Skip crop</button>
-            <button onClick={applyCrop} className="bg-accent text-bg font-semibold px-4 py-1.5 rounded text-xs hover:bg-accent/90 transition-colors">Apply Crop →</button>
+            <button onClick={applyCrop} className="bg-accent text-bg font-semibold px-4 py-1.5 rounded text-xs hover:bg-accent/90 transition-colors">
+              {side === "front" && backImage && !backCropped ? "Crop Front → Back" : "Apply Crop →"}
+            </button>
           </>
         ) : (
           <>
