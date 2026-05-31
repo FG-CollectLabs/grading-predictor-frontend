@@ -87,6 +87,13 @@ export const api = {
 
   createCert: (req: CreateCertRequest) => post<{ id: number; cert_number: string }>("/v1/certs", req),
   getCert: (id: number) => get<CertFullDetail>(`/v1/certs/${id}`),
+  deleteCert: async (id: number) => {
+    const res = await fetch(`${BASE}/v1/certs/${id}`, {
+      method: "DELETE",
+      headers: authHeaders(),
+    });
+    if (!res.ok) throw new Error(`DELETE /v1/certs/${id}: ${res.status}`);
+  },
   patchCert: (id: number, req: {
     cert_number: string; grader: string; notes: string;
     category: string; purpose: string;

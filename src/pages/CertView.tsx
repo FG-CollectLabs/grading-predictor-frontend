@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { api } from "../api";
 import type {
@@ -55,6 +55,12 @@ export default function CertView() {
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
 
+  const [deleting, setDeleting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  const [uploadingFront, setUploadingFront] = useState(false);
+  const [uploadingBack, setUploadingBack] = useState(false);
+
   useEffect(() => {
     Promise.all([api.getCert(certId), api.listInspections(certId)])
       .then(([c, insps]) => {
@@ -108,6 +114,33 @@ export default function CertView() {
       setEditError(String(e));
     } finally {
       setEditSaving(false);
+    }
+  }
+
+  async function handleDelete() {
+    setDeleting(true);
+    try {
+      await api.deleteCert(certId);
+      navigate(-1);
+    } catch (e) {
+      setError(String(e));
+      setDeleting(false);
+      setConfirmDelete(false);
+    }
+  }
+
+  async function handleImageUpload(side: "front" | "back", file: File) {
+    const setUploading = side === "front" ? setUploadingFront : setUploadingBack;
+    setUploading(true);
+    setError(null);
+    try {
+      await api.uploadCertImage(certId, side, file);
+      const updated = await api.getCert(certId);
+      setCert(updated);
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setUploading(false);
     }
   }
 
@@ -178,35 +211,56 @@ export default function CertView() {
               </div>
               <div className="flex flex-col items-end gap-2">
                 <div className="text-[10px] text-muted">{new Date(cert.created_at).toLocaleDateString()}</div>
-                <button
-                  onClick={startEdit}
-                  className="text-xs text-muted hover:text-accent transition-colors border border-border hover:border-accent rounded px-2 py-0.5"
-                >
-                  Edit
-                </button>
+                <div className="flex gap-1.5">
+                  <button
+                    onClick={startEdit}
+                    className="text-xs text-muted hover:text-accent transition-colors border border-border hover:border-accent rounded px-2 py-0.5"
+                  >
+                    Edit
+                  </button>
+                  {confirmDelete ? (
+                    <>
+                      <button
+                        onClick={handleDelete}
+                        disabled={deleting}
+                        className="text-xs text-red-400 border border-red-500/50 rounded px-2 py-0.5 hover:bg-red-900/20 transition-colors disabled:opacity-40"
+                      >
+                        {deleting ? "Deleting…" : "Confirm"}
+                      </button>
+                      <button
+                        onClick={() => setConfirmDelete(false)}
+                        className="text-xs text-muted border border-border rounded px-2 py-0.5 hover:text-[#e6edf3] transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      onClick={() => setConfirmDelete(true)}
+                      className="text-xs text-muted hover:text-red-400 transition-colors border border-border hover:border-red-500/50 rounded px-2 py-0.5"
+                    >
+                      Delete
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
 
-            {/* Scan thumbnails */}
-            {(frontUrl || backUrl) && (
-              <div className="flex gap-3 mt-4">
-                {frontUrl && (
-                  <a href={frontUrl} target="_blank" rel="noreferrer" className="block">
-                    <img src={frontUrl} alt="Front" className="h-28 object-contain rounded border border-border bg-bg" />
-                    <div className="text-[10px] text-muted text-center mt-1">Front</div>
-                  </a>
-                )}
-                {backUrl && (
-                  <a href={backUrl} target="_blank" rel="noreferrer" className="block">
-                    <img src={backUrl} alt="Back" className="h-28 object-contain rounded border border-border bg-bg" />
-                    <div className="text-[10px] text-muted text-center mt-1">Back</div>
-                  </a>
-                )}
-              </div>
-            )}
-            {!frontUrl && !backUrl && (
-              <div className="text-muted text-xs mt-3">No scans uploaded.</div>
-            )}
+            {/* Scans */}
+            <div className="flex gap-4 mt-4">
+              <ScanSlot
+                label="Front"
+                url={frontUrl}
+                uploading={uploadingFront}
+                onUpload={(f) => handleImageUpload("front", f)}
+              />
+              <ScanSlot
+                label="Back"
+                url={backUrl}
+                uploading={uploadingBack}
+                onUpload={(f) => handleImageUpload("back", f)}
+              />
+            </div>
           </>
         )}
       </div>
@@ -526,5 +580,58 @@ function CategoryBadge({ category }: { category: CertCategory }) {
   );
 }
 
-// keep useRef import used for future image upload
+// ── Scan slot ──────────────────────────────────────────────────────────────────
+
+function ScanSlot({
+  label,
+  url,
+  uploading,
+  onUpload,
+}: {
+  label: string;
+  url: string | null;
+  uploading: boolean;
+  onUpload: (file: File) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (file) onUpload(file);
+    e.target.value = "";
+  }
+
+  return (
+    <div className="flex flex-col items-center gap-1.5">
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={handleChange}
+      />
+      {url ? (
+        <a href={url} target="_blank" rel="noreferrer" className="block">
+          <img
+            src={url}
+            alt={label}
+            className="h-28 object-contain rounded border border-border bg-bg"
+          />
+        </a>
+      ) : (
+        <div className="h-28 w-20 rounded border border-dashed border-border bg-bg flex items-center justify-center text-muted text-xs">
+          No scan
+        </div>
+      )}
+      <button
+        onClick={() => inputRef.current?.click()}
+        disabled={uploading}
+        className="text-[10px] text-muted hover:text-accent border border-border hover:border-accent rounded px-2 py-0.5 transition-colors disabled:opacity-40"
+      >
+        {uploading ? "Uploading…" : url ? `Replace ${label}` : `Upload ${label}`}
+      </button>
+    </div>
+  );
+}
+
 export { imageUrl };
