@@ -10,8 +10,20 @@ export interface EraGroup {
 
 export const POKEMON_SETS: EraGroup[] = [
   {
+    era: "Mega Evolution (2025–26)",
+    sets: [
+      { name: "Pitch Black",            code: "me4"       },
+      { name: "Chaos Rising",           code: "me3"       },
+      { name: "Perfect Order",          code: "me2"       },
+      { name: "Ascended Heroes",        code: "me1"       },
+    ],
+  },
+  {
     era: "Scarlet & Violet",
     sets: [
+      { name: "White Flare",            code: "sv10pt5"   },
+      { name: "Black Bolt",             code: "sv10"      },
+      { name: "Journey Together",       code: "sv9"       },
       { name: "Prismatic Evolutions",   code: "sve"       },
       { name: "Surging Sparks",         code: "sv8"       },
       { name: "Stellar Crown",          code: "sv7"       },
@@ -48,7 +60,7 @@ export const POKEMON_SETS: EraGroup[] = [
     ],
   },
   {
-    era: "Mega Evolution / XY–SM",
+    era: "XY / Sun & Moon",
     sets: [
       { name: "Cosmic Eclipse",         code: "sm12"      },
       { name: "Hidden Fates",           code: "hif"       },
