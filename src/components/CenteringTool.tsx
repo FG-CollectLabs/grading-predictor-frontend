@@ -87,11 +87,13 @@ export function CenteringTool({
   backImage,
   onDone,
   onSkip,
+  doneLabel = "Save & Continue →",
 }: {
   frontImage?: string;
   backImage?: string;
   onDone: (front: CenteringResult, back: CenteringResult) => void;
   onSkip: () => void;
+  doneLabel?: string;
 }) {
   const [mode, setMode] = useState<"crop" | "lines">("crop");
   const [side, setSide] = useState<"front" | "back">(frontImage ? "front" : "back");
@@ -386,7 +388,7 @@ export function CenteringTool({
           <>
             <button onClick={() => setMode("crop")} className="px-3 py-1 text-xs border border-border text-muted rounded hover:border-[#8b949e] transition-colors">Re-crop</button>
             <button onClick={onSkip} className="px-3 py-1 text-xs border border-border text-muted rounded hover:border-[#8b949e] transition-colors">Skip</button>
-            <button onClick={handleDone} className="bg-accent text-bg font-semibold px-4 py-1.5 rounded text-xs hover:bg-accent/90 transition-colors">Save &amp; Continue →</button>
+            <button onClick={handleDone} className="bg-accent text-bg font-semibold px-4 py-1.5 rounded text-xs hover:bg-accent/90 transition-colors">{doneLabel}</button>
           </>
         )}
       </div>

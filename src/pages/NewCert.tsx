@@ -406,6 +406,51 @@ export default function NewCert() {
 
 // ── Inspection Form ───────────────────────────────────────────────────────────
 
+type CornerGrade = "sharp" | "light_wear" | "heavy_wear";
+type EdgeGrade = "clean" | "light_wear" | "heavy_wear" | "nick";
+type SurfaceGrade = "clean" | "light_scratch" | "heavy_scratch" | "print_line" | "print_dot";
+
+const CORNER_GRADES: CornerGrade[] = ["sharp", "light_wear", "heavy_wear"];
+const EDGE_GRADES: EdgeGrade[] = ["clean", "light_wear", "heavy_wear", "nick"];
+const SURFACE_GRADES: SurfaceGrade[] = ["clean", "light_scratch", "heavy_scratch", "print_line", "print_dot"];
+
+interface InspForm {
+  centering_front_lr: number;
+  centering_front_tb: number;
+  centering_front_rotation: number;
+  centering_back_lr: number;
+  centering_back_tb: number;
+  centering_back_rotation: number;
+  surface_front: SurfaceGrade | null;
+  surface_back: SurfaceGrade | null;
+  corner_tl: CornerGrade | null;
+  corner_tr: CornerGrade | null;
+  corner_bl: CornerGrade | null;
+  corner_br: CornerGrade | null;
+  edge_top: EdgeGrade | null;
+  edge_bottom: EdgeGrade | null;
+  edge_left: EdgeGrade | null;
+  edge_right: EdgeGrade | null;
+  notes: string;
+}
+
+function gradeColor(g: string | null): string {
+  if (!g || g === "sharp" || g === "clean") return "border-border text-muted bg-transparent";
+  if (g === "light_wear" || g === "light_scratch") return "border-yellow-400/50 text-yellow-400 bg-yellow-400/10";
+  if (g === "heavy_wear" || g === "heavy_scratch" || g === "print_line") return "border-orange-400/50 text-orange-400 bg-orange-400/10";
+  return "border-red-400/50 text-red-400 bg-red-400/10";
+}
+
+function gradeShort(g: string | null): string {
+  if (!g || g === "sharp" || g === "clean") return "—";
+  if (g === "light_wear" || g === "light_scratch") return "LW";
+  if (g === "heavy_wear" || g === "heavy_scratch") return "HW";
+  if (g === "nick") return "Nick";
+  if (g === "print_line") return "PL";
+  if (g === "print_dot") return "PD";
+  return g;
+}
+
 function InspectionForm({
   onSave,
   onSkip,
@@ -419,24 +464,84 @@ function InspectionForm({
   frontCentering?: CenteringResult;
   backCentering?: CenteringResult;
 }) {
-  const [form, setForm] = useState<CreateInspectionRequest>({
-    source: "manual",
+  const [form, setForm] = useState<InspForm>({
     centering_front_lr: frontCentering?.lr ?? DEFAULT_CENTERING.lr,
     centering_front_tb: frontCentering?.tb ?? DEFAULT_CENTERING.tb,
+    centering_front_rotation: frontCentering?.rotationDeg ?? 0,
     centering_back_lr: backCentering?.lr ?? DEFAULT_CENTERING.lr,
     centering_back_tb: backCentering?.tb ?? DEFAULT_CENTERING.tb,
-    corners_defective_cut: 0,
-    corners_major_whitening: 0,
-    corners_minor_whitening: 0,
-    corners_micro_whitening: 0,
-    edges_whitening: 0,
-    surface_dead_pixels: 0,
-    surface_dimples: 0,
-    surface_print_lines: 0,
+    centering_back_rotation: backCentering?.rotationDeg ?? 0,
+    surface_front: null, surface_back: null,
+    corner_tl: null, corner_tr: null, corner_bl: null, corner_br: null,
+    edge_top: null, edge_bottom: null, edge_left: null, edge_right: null,
+    notes: "",
   });
+  const [surfaceSide, setSurfaceSide] = useState<"front" | "back">("front");
 
-  function setNum(key: keyof CreateInspectionRequest, value: number) {
-    setForm((p) => ({ ...p, [key]: value }));
+  function patch(p: Partial<InspForm>) { setForm((prev) => ({ ...prev, ...p })); }
+
+  function cycleCorner(key: keyof InspForm) {
+    const cur = (form[key] as CornerGrade | null) ?? "sharp";
+    const idx = CORNER_GRADES.indexOf(cur);
+    patch({ [key]: CORNER_GRADES[(idx + 1) % CORNER_GRADES.length] });
+  }
+
+  function cycleEdge(key: keyof InspForm) {
+    const cur = (form[key] as EdgeGrade | null) ?? "clean";
+    const idx = EDGE_GRADES.indexOf(cur);
+    patch({ [key]: EDGE_GRADES[(idx + 1) % EDGE_GRADES.length] });
+  }
+
+  function cycleSurface(key: keyof InspForm) {
+    const cur = (form[key] as SurfaceGrade | null) ?? "clean";
+    const idx = SURFACE_GRADES.indexOf(cur);
+    patch({ [key]: SURFACE_GRADES[(idx + 1) % SURFACE_GRADES.length] });
+  }
+
+  const surfaceKey = surfaceSide === "front" ? "surface_front" : "surface_back";
+  const surfaceVal = form[surfaceKey] as SurfaceGrade | null;
+
+  const cornerBtn = (key: keyof InspForm, pos: string) => {
+    const g = form[key] as CornerGrade | null;
+    return (
+      <button key={key} onClick={() => cycleCorner(key)} title={pos}
+        className={`w-10 h-10 rounded border text-[10px] font-semibold hover:opacity-80 transition-colors ${gradeColor(g)}`}>
+        {gradeShort(g)}
+      </button>
+    );
+  };
+
+  const edgeBtn = (key: keyof InspForm, label: string, horiz: boolean) => {
+    const g = form[key] as EdgeGrade | null;
+    return (
+      <button key={key} onClick={() => cycleEdge(key)} title={label}
+        className={`${horiz ? "h-10 w-full" : "w-10 h-full min-h-[2.5rem]"} rounded border text-[10px] font-semibold hover:opacity-80 transition-colors ${gradeColor(g)}`}>
+        {gradeShort(g) === "—" ? label : gradeShort(g)}
+      </button>
+    );
+  };
+
+  function toRequest(): CreateInspectionRequest {
+    return {
+      source: "manual",
+      centering_front_lr: form.centering_front_lr,
+      centering_front_tb: form.centering_front_tb,
+      centering_front_rotation: form.centering_front_rotation || null,
+      centering_back_lr: form.centering_back_lr,
+      centering_back_tb: form.centering_back_tb,
+      centering_back_rotation: form.centering_back_rotation || null,
+      surface_front: form.surface_front,
+      surface_back: form.surface_back,
+      corner_tl: form.corner_tl,
+      corner_tr: form.corner_tr,
+      corner_bl: form.corner_bl,
+      corner_br: form.corner_br,
+      edge_top: form.edge_top,
+      edge_bottom: form.edge_bottom,
+      edge_left: form.edge_left,
+      edge_right: form.edge_right,
+      notes: form.notes || undefined,
+    };
   }
 
   return (
@@ -449,131 +554,86 @@ function InspectionForm({
         <div className="grid grid-cols-2 gap-x-6 gap-y-4">
           <div className="space-y-3">
             <div className="text-xs text-muted mb-2 uppercase tracking-widest">Front</div>
-            <CenteringSlider
-              label="L / R"
-              value={form.centering_front_lr ?? 50}
-              onChange={(v) => setNum("centering_front_lr", v)}
-            />
-            <CenteringSlider
-              label="T / B"
-              value={form.centering_front_tb ?? 50}
-              onChange={(v) => setNum("centering_front_tb", v)}
-            />
+            <CenteringSlider label="L / R" value={form.centering_front_lr}
+              onChange={(v) => patch({ centering_front_lr: v })} />
+            <CenteringSlider label="T / B" value={form.centering_front_tb}
+              onChange={(v) => patch({ centering_front_tb: v })} />
+            <RotationField value={form.centering_front_rotation}
+              onChange={(v) => patch({ centering_front_rotation: v })} />
           </div>
           <div className="space-y-3">
             <div className="text-xs text-muted mb-2 uppercase tracking-widest">Back</div>
-            <CenteringSlider
-              label="L / R"
-              value={form.centering_back_lr ?? 50}
-              onChange={(v) => setNum("centering_back_lr", v)}
-            />
-            <CenteringSlider
-              label="T / B"
-              value={form.centering_back_tb ?? 50}
-              onChange={(v) => setNum("centering_back_tb", v)}
-            />
+            <CenteringSlider label="L / R" value={form.centering_back_lr}
+              onChange={(v) => patch({ centering_back_lr: v })} />
+            <CenteringSlider label="T / B" value={form.centering_back_tb}
+              onChange={(v) => patch({ centering_back_tb: v })} />
+            <RotationField value={form.centering_back_rotation}
+              onChange={(v) => patch({ centering_back_rotation: v })} />
           </div>
         </div>
       </section>
 
-      {/* Corners */}
+      {/* Defect map */}
       <section>
-        <SectionHeader>Corners</SectionHeader>
-        <div className="space-y-3">
-          <CountSlider
-            label="Defective cuts"
-            description="imperfect corner geometry"
-            value={form.corners_defective_cut ?? 0}
-            max={4}
-            onChange={(v) => setNum("corners_defective_cut", v)}
-          />
-          <CountSlider
-            label="Major whitening"
-            description="immediately noticeable, stands out"
-            value={form.corners_major_whitening ?? 0}
-            max={4}
-            onChange={(v) => setNum("corners_major_whitening", v)}
-          />
-          <CountSlider
-            label="Minor whitening"
-            description="noticeable on close inspection"
-            value={form.corners_minor_whitening ?? 0}
-            max={4}
-            onChange={(v) => setNum("corners_minor_whitening", v)}
-          />
-          <CountSlider
-            label="Micro whitening"
-            description="requires loupe, not obvious at a glance"
-            value={form.corners_micro_whitening ?? 0}
-            max={4}
-            onChange={(v) => setNum("corners_micro_whitening", v)}
-          />
-        </div>
-      </section>
-
-      {/* Edges */}
-      <section>
-        <SectionHeader>Edges</SectionHeader>
-        <div className="space-y-3">
-          <CountSlider
-            label="Whitening"
-            value={form.edges_whitening ?? 0}
-            max={10}
-            onChange={(v) => setNum("edges_whitening", v)}
-          />
-        </div>
-      </section>
-
-      {/* Surface */}
-      <section>
-        <SectionHeader>Surface</SectionHeader>
-        <div className="space-y-3">
-          <CountSlider
-            label="Dead pixels"
-            value={form.surface_dead_pixels ?? 0}
-            max={20}
-            onChange={(v) => setNum("surface_dead_pixels", v)}
-          />
-          <CountSlider
-            label="Dimples"
-            value={form.surface_dimples ?? 0}
-            max={10}
-            onChange={(v) => setNum("surface_dimples", v)}
-          />
-          <CountSlider
-            label="Print lines"
-            value={form.surface_print_lines ?? 0}
-            max={10}
-            onChange={(v) => setNum("surface_print_lines", v)}
-          />
+        <SectionHeader>Defects</SectionHeader>
+        <div className="flex gap-4 items-start">
+          <div className="flex-shrink-0">
+            <div className="flex gap-1 mb-1">
+              {cornerBtn("corner_tl", "Top-Left")}
+              {edgeBtn("edge_top", "Top", true)}
+              {cornerBtn("corner_tr", "Top-Right")}
+            </div>
+            <div className="flex gap-1 mb-1 items-stretch">
+              {edgeBtn("edge_left", "L", false)}
+              <div
+                onClick={() => cycleSurface(surfaceKey)}
+                className={`flex-1 min-w-[5rem] h-16 rounded border flex flex-col items-center justify-center gap-0.5 cursor-pointer hover:opacity-80 transition-colors ${gradeColor(surfaceVal)}`}
+              >
+                <div className="flex gap-1 mb-0.5" onClick={(e) => e.stopPropagation()}>
+                  {(["front", "back"] as const).map((s) => (
+                    <button key={s} onClick={() => setSurfaceSide(s)}
+                      className={`text-[9px] px-1 py-0.5 rounded transition-colors ${
+                        surfaceSide === s ? "bg-accent/20 text-accent" : "text-muted hover:text-[#e6edf3]"
+                      }`}>
+                      {s}
+                    </button>
+                  ))}
+                </div>
+                <span className="text-[10px] font-semibold">{gradeShort(surfaceVal)}</span>
+              </div>
+              {edgeBtn("edge_right", "R", false)}
+            </div>
+            <div className="flex gap-1">
+              {cornerBtn("corner_bl", "Bottom-Left")}
+              {edgeBtn("edge_bottom", "Bot", true)}
+              {cornerBtn("corner_br", "Bottom-Right")}
+            </div>
+          </div>
+          <div className="text-[10px] text-muted space-y-1 pt-1">
+            <div className="font-semibold text-[#e6edf3] mb-2">Click to cycle</div>
+            <div>Corners: sharp → light → heavy</div>
+            <div>Edges: clean → light → heavy → nick</div>
+            <div>Surface: clean → scratch → PL → PD</div>
+          </div>
         </div>
       </section>
 
       {/* Notes */}
       <div>
         <label className="text-muted text-xs block mb-1">Notes</label>
-        <textarea
-          rows={2}
-          value={form.notes ?? ""}
-          onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value || undefined }))}
+        <textarea rows={2} value={form.notes}
+          onChange={(e) => patch({ notes: e.target.value })}
           placeholder="any additional observations…"
-          className="w-full bg-bg border border-border rounded px-3 py-2 text-sm text-[#e6edf3] placeholder-muted outline-none focus:border-accent resize-none"
-        />
+          className="w-full bg-bg border border-border rounded px-3 py-2 text-sm text-[#e6edf3] placeholder-muted outline-none focus:border-accent resize-none" />
       </div>
 
       <div className="flex gap-3">
-        <button
-          onClick={() => onSave(form)}
-          disabled={saving}
-          className="bg-accent text-bg font-semibold px-4 py-2 rounded text-sm hover:bg-accent/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-        >
+        <button onClick={() => onSave(toRequest())} disabled={saving}
+          className="bg-accent text-bg font-semibold px-4 py-2 rounded text-sm hover:bg-accent/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
           {saving ? "Saving…" : "Save Inspection"}
         </button>
-        <button
-          onClick={onSkip}
-          disabled={saving}
-          className="border border-border text-muted px-4 py-2 rounded text-sm hover:text-[#e6edf3] hover:border-[#8b949e] transition-colors"
-        >
+        <button onClick={onSkip} disabled={saving}
+          className="border border-border text-muted px-4 py-2 rounded text-sm hover:text-[#e6edf3] hover:border-[#8b949e] transition-colors">
           Skip for now
         </button>
       </div>
@@ -584,74 +644,36 @@ function InspectionForm({
 // ── Shared form components ────────────────────────────────────────────────────
 
 function SectionHeader({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="text-muted text-xs uppercase tracking-widest mb-3">{children}</div>
-  );
+  return <div className="text-muted text-xs uppercase tracking-widest mb-3">{children}</div>;
 }
 
-function CenteringSlider({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: number;
-  onChange: (v: number) => void;
-}) {
-  const a = value;
-  const b = 100 - value;
+function CenteringSlider({ label, value, onChange }: { label: string; value: number; onChange: (v: number) => void }) {
+  const a = value; const b = 100 - value;
   const offCenter = Math.abs(50 - value);
-  const color = offCenter >= 10 ? "text-yellow-400" : "text-[#e6edf3]";
   return (
     <div>
       <div className="flex justify-between text-xs mb-1">
         <span className="text-muted">{label}</span>
-        <span className={`font-mono font-semibold ${color}`}>{a} / {b}</span>
+        <span className={`font-mono font-semibold ${offCenter >= 10 ? "text-yellow-400" : "text-[#e6edf3]"}`}>{a} / {b}</span>
       </div>
-      <input
-        type="range"
-        min={0}
-        max={100}
-        value={value}
-        onChange={(e) => onChange(Number(e.target.value))}
-        className="w-full accent-[#58a6ff]"
-      />
+      <input type="range" min={0} max={100} value={value} onChange={(e) => onChange(Number(e.target.value))} className="w-full accent-[#58a6ff]" />
     </div>
   );
 }
 
-function CountSlider({
-  label,
-  description,
-  value,
-  max,
-  onChange,
-}: {
-  label: string;
-  description?: string;
-  value: number;
-  max: number;
-  onChange: (v: number) => void;
-}) {
+function RotationField({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+  const off = Math.abs(value) >= 1;
   return (
-    <div>
-      <div className="flex justify-between text-xs mb-1">
-        <div className="flex items-baseline gap-1.5">
-          <span className="text-[#e6edf3]">{label}</span>
-          {description && <span className="text-muted text-[11px]">{description}</span>}
-        </div>
-        <span className={`font-mono font-semibold tabular-nums ${value > 0 ? "text-accent" : "text-muted"}`}>
-          {value}
-        </span>
-      </div>
-      <input
-        type="range"
-        min={0}
-        max={max}
-        value={value}
-        onChange={(e) => onChange(Number(e.target.value))}
-        className="w-full accent-[#58a6ff]"
-      />
+    <div className="flex items-center gap-2">
+      <span className="text-muted text-xs flex-1">Rotation</span>
+      <input type="number" step={0.1} min={-45} max={45}
+        value={value === 0 ? "" : value}
+        onChange={(e) => onChange(e.target.value === "" ? 0 : Number(e.target.value))}
+        placeholder="0°"
+        className={`w-16 text-right bg-bg border rounded px-2 py-0.5 text-xs font-mono outline-none focus:border-accent ${
+          off ? "text-yellow-400 border-yellow-400/40" : "text-muted border-border"
+        }`} />
+      <span className="text-muted text-xs">°</span>
     </div>
   );
 }
