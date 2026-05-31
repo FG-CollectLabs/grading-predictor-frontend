@@ -11,6 +11,8 @@ import { CenteringTool } from "../components/CenteringTool";
 import type { CenteringResult } from "../components/CenteringTool";
 import { POKEMON_SETS } from "../data/sets";
 
+const DEFAULT_CENTERING: CenteringResult = { lr: 50, tb: 50, rotationDeg: 0 };
+
 const GRADER_CATEGORIES: Record<string, Array<{ value: CertCategory; label: string }>> = {
   PSA: [
     { value: "raw",   label: "Raw / Pre-grade" },
@@ -37,7 +39,7 @@ function slugify(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9]/g, "").substring(0, 12);
 }
 
-type Step = "card" | "cert" | "inspection";
+type Step = "card" | "cert" | "centering" | "inspection";
 
 export default function NewCert() {
   const navigate = useNavigate();
@@ -71,9 +73,8 @@ export default function NewCert() {
   const [frontPreview, setFrontPreview] = useState<string | null>(null);
   const [backFile, setBackFile] = useState<File | null>(null);
   const [backPreview, setBackPreview] = useState<string | null>(null);
-  const [frontCentering, setFrontCentering] = useState<CenteringResult>({ lr: 50, tb: 50 });
-  const [backCentering, setBackCentering] = useState<CenteringResult>({ lr: 50, tb: 50 });
-  const [centeringSide, setCenteringSide] = useState<"front" | "back">("front");
+  const [frontCentering, setFrontCentering] = useState<CenteringResult>(DEFAULT_CENTERING);
+  const [backCentering, setBackCentering] = useState<CenteringResult>(DEFAULT_CENTERING);
 
   useEffect(() => {
     api.listCards().then((data) => setCards(data ?? [])).catch(() => null);
@@ -128,7 +129,7 @@ export default function NewCert() {
         backFile ? api.uploadCertImage(cert.id, "back", backFile) : Promise.resolve(),
       ]);
 
-      setStep("inspection");
+      setStep(frontFile || backFile ? "centering" : "inspection");
     } catch (e) {
       setError(String(e));
     } finally {
@@ -354,51 +355,16 @@ export default function NewCert() {
             <ImageDropZone label="Front scan" onChange={(f) => {
               setFrontFile(f);
               setFrontPreview((prev) => { if (prev) URL.revokeObjectURL(prev); return f ? URL.createObjectURL(f) : null; });
-              if (f) setCenteringSide("front");
             }} />
             <ImageDropZone label="Back scan" onChange={(f) => {
               setBackFile(f);
               setBackPreview((prev) => { if (prev) URL.revokeObjectURL(prev); return f ? URL.createObjectURL(f) : null; });
-              if (f && !frontFile) setCenteringSide("back");
             }} />
           </div>
 
           {(frontPreview || backPreview) && (
-            <div className="mb-5 border-t border-border pt-4 space-y-3">
-              {frontPreview && backPreview && (
-                <div className="flex gap-2">
-                  {(["front", "back"] as const).map((side) => (
-                    <button
-                      key={side}
-                      type="button"
-                      onClick={() => setCenteringSide(side)}
-                      className={`px-3 py-1 text-xs rounded border transition-colors ${
-                        centeringSide === side
-                          ? "border-accent text-accent bg-accent/10"
-                          : "border-border text-muted hover:border-[#8b949e]"
-                      }`}
-                    >
-                      {side === "front" ? "Front" : "Back"}
-                    </button>
-                  ))}
-                </div>
-              )}
-              <div className="max-w-xs mx-auto">
-                {centeringSide === "front" && frontPreview && (
-                  <CenteringTool
-                    key={`front-${frontFile?.name}`}
-                    imageUrl={frontPreview}
-                    onChange={setFrontCentering}
-                  />
-                )}
-                {centeringSide === "back" && backPreview && (
-                  <CenteringTool
-                    key={`back-${backFile?.name}`}
-                    imageUrl={backPreview}
-                    onChange={setBackCentering}
-                  />
-                )}
-              </div>
+            <div className="mb-4 text-[11px] text-muted border border-border/50 rounded px-3 py-2 bg-surface">
+              Centering lines will be set on the next screen after saving.
             </div>
           )}
 
@@ -410,6 +376,19 @@ export default function NewCert() {
             {saving ? "Saving…" : "Continue →"}
           </button>
         </div>
+      )}
+
+      {step === "centering" && (
+        <CenteringTool
+          frontImage={frontPreview ?? undefined}
+          backImage={backPreview ?? undefined}
+          onDone={(front, back) => {
+            setFrontCentering(front);
+            setBackCentering(back);
+            setStep("inspection");
+          }}
+          onSkip={() => setStep("inspection")}
+        />
       )}
 
       {step === "inspection" && certId && (
@@ -442,10 +421,10 @@ function InspectionForm({
 }) {
   const [form, setForm] = useState<CreateInspectionRequest>({
     source: "manual",
-    centering_front_lr: frontCentering?.lr ?? 50,
-    centering_front_tb: frontCentering?.tb ?? 50,
-    centering_back_lr: backCentering?.lr ?? 50,
-    centering_back_tb: backCentering?.tb ?? 50,
+    centering_front_lr: frontCentering?.lr ?? DEFAULT_CENTERING.lr,
+    centering_front_tb: frontCentering?.tb ?? DEFAULT_CENTERING.tb,
+    centering_back_lr: backCentering?.lr ?? DEFAULT_CENTERING.lr,
+    centering_back_tb: backCentering?.tb ?? DEFAULT_CENTERING.tb,
     corners_defective_cut: 0,
     corners_major_whitening: 0,
     corners_minor_whitening: 0,
@@ -770,8 +749,9 @@ function ImageDropZone({ label, onChange }: { label: string; onChange: (f: File 
 
 function StepIndicator({ current }: { current: Step }) {
   const steps: { key: Step; label: string }[] = [
-    { key: "card", label: "Card" },
-    { key: "cert", label: "Cert" },
+    { key: "card",       label: "Card"       },
+    { key: "cert",       label: "Cert"       },
+    { key: "centering",  label: "Centering"  },
     { key: "inspection", label: "Inspection" },
   ];
   const currentIdx = steps.findIndex((s) => s.key === current);
