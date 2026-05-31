@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "../api";
 import type {
@@ -76,9 +76,35 @@ export default function NewCert() {
   const [frontCentering, setFrontCentering] = useState<CenteringResult>(DEFAULT_CENTERING);
   const [backCentering, setBackCentering] = useState<CenteringResult>(DEFAULT_CENTERING);
 
+  const [certDuplicate, setCertDuplicate] = useState<{ cert_id: number; card_id: number; grader: string; category: string } | null>(null);
+  const [certCheckPending, setCertCheckPending] = useState(false);
+
   useEffect(() => {
     api.listCards().then((data) => setCards(data ?? [])).catch(() => null);
   }, []);
+
+  const checkDuplicate = useCallback((num: string) => {
+    const trimmed = num.trim();
+    if (!trimmed) { setCertDuplicate(null); return; }
+    setCertCheckPending(true);
+    api.checkCertNumber(trimmed)
+      .then((r) => {
+        if (r.exists && r.cert_id && r.card_id) {
+          setCertDuplicate({ cert_id: r.cert_id, card_id: r.card_id, grader: r.grader ?? "", category: r.category ?? "" });
+        } else {
+          setCertDuplicate(null);
+        }
+      })
+      .catch(() => setCertDuplicate(null))
+      .finally(() => setCertCheckPending(false));
+  }, []);
+
+  useEffect(() => {
+    setCertDuplicate(null);
+    if (!certNumber.trim()) return;
+    const t = setTimeout(() => checkDuplicate(certNumber), 500);
+    return () => clearTimeout(t);
+  }, [certNumber, checkDuplicate]);
 
   // ── Step 1: Card ──────────────────────────────────────────────────────────
 
@@ -293,6 +319,30 @@ export default function NewCert() {
 
           <div className="grid grid-cols-2 gap-3 mb-4">
             <Field label="Cert Number" value={certNumber} onChange={setCertNumber} placeholder="12345678" className="col-span-2" />
+
+            {certCheckPending && (
+              <div className="col-span-2 text-xs text-muted">Checking cert number…</div>
+            )}
+
+            {certDuplicate && (
+              <div className="col-span-2 bg-red-900/70 border border-red-500 rounded-md p-4">
+                <div className="text-red-300 font-bold text-sm mb-1">⚠ Duplicate cert number</div>
+                <div className="text-red-200 text-xs mb-2">
+                  Cert <span className="font-mono font-semibold">{certNumber.trim()}</span> already exists in the database.
+                </div>
+                <div className="text-red-200 text-xs space-y-0.5">
+                  <div>Grader: <span className="font-semibold">{certDuplicate.grader}</span></div>
+                  <div>Category: <span className="font-semibold">{certDuplicate.category}</span></div>
+                </div>
+                <a
+                  href={`/certs/${certDuplicate.cert_id}`}
+                  className="mt-3 inline-block text-xs text-red-200 underline hover:text-white"
+                >
+                  View existing cert →
+                </a>
+              </div>
+            )}
+
             <div>
               <label className="text-muted text-xs block mb-1">Grader</label>
               <select
@@ -370,7 +420,7 @@ export default function NewCert() {
 
           <button
             onClick={handleCertStep}
-            disabled={saving || !certNumber.trim()}
+            disabled={saving || !certNumber.trim() || !!certDuplicate}
             className="bg-accent text-bg font-semibold px-4 py-2 rounded text-sm hover:bg-accent/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
             {saving ? "Saving…" : "Continue →"}
