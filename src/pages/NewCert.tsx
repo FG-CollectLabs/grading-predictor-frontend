@@ -7,6 +7,8 @@ import type {
   CertCategory,
   CertPurpose,
 } from "../types";
+import { CenteringTool } from "../components/CenteringTool";
+import type { CenteringResult } from "../components/CenteringTool";
 
 type Step = "card" | "cert" | "inspection";
 
@@ -36,7 +38,12 @@ export default function NewCert() {
   const [category, setCategory] = useState<CertCategory>("raw");
   const [purpose, setPurpose] = useState<CertPurpose>("analytics");
   const [frontFile, setFrontFile] = useState<File | null>(null);
+  const [frontPreview, setFrontPreview] = useState<string | null>(null);
   const [backFile, setBackFile] = useState<File | null>(null);
+  const [backPreview, setBackPreview] = useState<string | null>(null);
+  const [frontCentering, setFrontCentering] = useState<CenteringResult>({ lr: 50, tb: 50 });
+  const [backCentering, setBackCentering] = useState<CenteringResult>({ lr: 50, tb: 50 });
+  const [centeringSide, setCenteringSide] = useState<"front" | "back">("front");
 
   useEffect(() => {
     api.listCards().then((data) => setCards(data ?? [])).catch(() => null);
@@ -235,10 +242,57 @@ export default function NewCert() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3 mb-5">
-            <ImageDropZone label="Front scan" onChange={setFrontFile} />
-            <ImageDropZone label="Back scan" onChange={setBackFile} />
+          <div className="grid grid-cols-2 gap-3 mb-4">
+            <ImageDropZone label="Front scan" onChange={(f) => {
+              setFrontFile(f);
+              setFrontPreview((prev) => { if (prev) URL.revokeObjectURL(prev); return f ? URL.createObjectURL(f) : null; });
+              if (f) setCenteringSide("front");
+            }} />
+            <ImageDropZone label="Back scan" onChange={(f) => {
+              setBackFile(f);
+              setBackPreview((prev) => { if (prev) URL.revokeObjectURL(prev); return f ? URL.createObjectURL(f) : null; });
+              if (f && !frontFile) setCenteringSide("back");
+            }} />
           </div>
+
+          {(frontPreview || backPreview) && (
+            <div className="mb-5 border-t border-border pt-4 space-y-3">
+              {frontPreview && backPreview && (
+                <div className="flex gap-2">
+                  {(["front", "back"] as const).map((side) => (
+                    <button
+                      key={side}
+                      type="button"
+                      onClick={() => setCenteringSide(side)}
+                      className={`px-3 py-1 text-xs rounded border transition-colors ${
+                        centeringSide === side
+                          ? "border-accent text-accent bg-accent/10"
+                          : "border-border text-muted hover:border-[#8b949e]"
+                      }`}
+                    >
+                      {side === "front" ? "Front" : "Back"}
+                    </button>
+                  ))}
+                </div>
+              )}
+              <div className="max-w-xs mx-auto">
+                {centeringSide === "front" && frontPreview && (
+                  <CenteringTool
+                    key={`front-${frontFile?.name}`}
+                    imageUrl={frontPreview}
+                    onChange={setFrontCentering}
+                  />
+                )}
+                {centeringSide === "back" && backPreview && (
+                  <CenteringTool
+                    key={`back-${backFile?.name}`}
+                    imageUrl={backPreview}
+                    onChange={setBackCentering}
+                  />
+                )}
+              </div>
+            </div>
+          )}
 
           <button
             onClick={handleCertStep}
@@ -251,7 +305,13 @@ export default function NewCert() {
       )}
 
       {step === "inspection" && certId && (
-        <InspectionForm onSave={handleInspectionStep} onSkip={skipInspection} saving={saving} />
+        <InspectionForm
+          onSave={handleInspectionStep}
+          onSkip={skipInspection}
+          saving={saving}
+          frontCentering={frontPreview ? frontCentering : undefined}
+          backCentering={backPreview ? backCentering : undefined}
+        />
       )}
     </div>
   );
@@ -263,17 +323,21 @@ function InspectionForm({
   onSave,
   onSkip,
   saving,
+  frontCentering,
+  backCentering,
 }: {
   onSave: (insp: CreateInspectionRequest) => void;
   onSkip: () => void;
   saving: boolean;
+  frontCentering?: CenteringResult;
+  backCentering?: CenteringResult;
 }) {
   const [form, setForm] = useState<CreateInspectionRequest>({
     source: "manual",
-    centering_front_lr: 50,
-    centering_front_tb: 50,
-    centering_back_lr: 50,
-    centering_back_tb: 50,
+    centering_front_lr: frontCentering?.lr ?? 50,
+    centering_front_tb: frontCentering?.tb ?? 50,
+    centering_back_lr: backCentering?.lr ?? 50,
+    centering_back_tb: backCentering?.tb ?? 50,
     corners_defective_cut: 0,
     corners_major_whitening: 0,
     corners_minor_whitening: 0,

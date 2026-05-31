@@ -375,23 +375,6 @@ function CertTableRow({ cert }: { cert: CertRow }) {
   );
 }
 
-function worstOf(values: (string | null)[], order: string[]): string | null {
-  for (const level of order) {
-    if (values.some((v) => v === level)) return level;
-  }
-  return values.find((v) => v !== null) ?? null;
-}
-
-function DefectTag({ value }: { value: string | null }) {
-  if (!value) return <span className="text-muted">—</span>;
-  const color =
-    value === "clean" || value === "sharp"
-      ? "text-green"
-      : value === "light_wear" || value === "light_scratch"
-      ? "text-yellow"
-      : "text-red-400";
-  return <span className={color}>{value.replace(/_/g, " ")}</span>;
-}
 
 function ImageThumb({ label, path }: { label: string; path: string }) {
   const gcsBase = import.meta.env.VITE_GCS_PUBLIC_BASE ?? "";
