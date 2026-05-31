@@ -3,6 +3,8 @@ import type {
   CardDetail,
   CertRow,
   CertFullDetail,
+  CertCategory,
+  CertPurpose,
   InspectionRow,
   StatRow,
   CreateCardRequest,
@@ -85,6 +87,12 @@ export const api = {
 
   createCert: (req: CreateCertRequest) => post<{ id: number; cert_number: string }>("/v1/certs", req),
   getCert: (id: number) => get<CertFullDetail>(`/v1/certs/${id}`),
+  patchCert: (id: number, req: {
+    cert_number: string; grader: string; notes: string;
+    category: string; purpose: string;
+    grade_received?: number | null; graded_at?: string;
+  }) => patch<{ id: number; cert_number: string; grader: string; notes: string | null; category: CertCategory; purpose: CertPurpose; grade_received: number | null; graded_at: string | null }>(`/v1/certs/${id}`, req),
+
   setCertGrade: (id: number, grade: number, graded_at?: string) =>
     patch<{ id: number }>(`/v1/certs/${id}/grade`, { grade, graded_at }),
 

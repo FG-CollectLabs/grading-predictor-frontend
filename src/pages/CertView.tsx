@@ -28,6 +28,16 @@ const PURPOSE_LABELS: Record<CertPurpose, { label: string; color: string }> = {
   crack_and_regrade: { label: "Crack + Regrade",     color: "text-orange-400"  },
 };
 
+interface EditForm {
+  cert_number: string;
+  grader: string;
+  category: CertCategory;
+  purpose: CertPurpose;
+  notes: string;
+  grade_received: string;
+  graded_at: string;
+}
+
 export default function CertView() {
   const { id } = useParams<{ id: string }>();
   const certId = Number(id);
@@ -40,6 +50,11 @@ export default function CertView() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
+  const [editing, setEditing] = useState(false);
+  const [editForm, setEditForm] = useState<EditForm | null>(null);
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+
   useEffect(() => {
     Promise.all([api.getCert(certId), api.listInspections(certId)])
       .then(([c, insps]) => {
@@ -49,6 +64,52 @@ export default function CertView() {
       .catch((e: unknown) => setError(String(e)))
       .finally(() => setLoading(false));
   }, [certId]);
+
+  function startEdit() {
+    if (!cert) return;
+    setEditForm({
+      cert_number: cert.cert_number,
+      grader: cert.grader,
+      category: cert.category,
+      purpose: cert.purpose,
+      notes: cert.notes ?? "",
+      grade_received: cert.grade_received !== null ? String(cert.grade_received) : "",
+      graded_at: cert.graded_at ?? "",
+    });
+    setEditError(null);
+    setEditing(true);
+  }
+
+  function cancelEdit() {
+    setEditing(false);
+    setEditForm(null);
+    setEditError(null);
+  }
+
+  async function submitEdit() {
+    if (!editForm) return;
+    setEditSaving(true);
+    setEditError(null);
+    try {
+      const gradeVal = editForm.grade_received.trim();
+      const updated = await api.patchCert(certId, {
+        cert_number: editForm.cert_number,
+        grader: editForm.grader,
+        notes: editForm.notes,
+        category: editForm.category,
+        purpose: editForm.purpose,
+        grade_received: gradeVal !== "" ? Number(gradeVal) : null,
+        graded_at: editForm.graded_at || undefined,
+      });
+      setCert((prev) => prev ? { ...prev, ...updated } : prev);
+      setEditing(false);
+      setEditForm(null);
+    } catch (e) {
+      setEditError(String(e));
+    } finally {
+      setEditSaving(false);
+    }
+  }
 
   async function handleSave(insp: CreateInspectionRequest) {
     setSaving(true);
@@ -87,47 +148,66 @@ export default function CertView() {
 
       {/* Cert header */}
       <div className="bg-surface border border-border rounded-md p-5 mb-4">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap mb-1">
-              <span className="text-lg font-semibold font-mono">{cert.cert_number}</span>
-              <span className="text-muted text-sm">· {cert.grader}</span>
-              <CategoryBadge category={cert.category} />
+        {editing && editForm ? (
+          <EditCertForm
+            form={editForm}
+            onChange={(patch) => setEditForm((p) => p ? { ...p, ...patch } : p)}
+            onSave={submitEdit}
+            onCancel={cancelEdit}
+            saving={editSaving}
+            error={editError}
+          />
+        ) : (
+          <>
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap mb-1">
+                  <span className="text-lg font-semibold font-mono">{cert.cert_number}</span>
+                  <span className="text-muted text-sm">· {cert.grader}</span>
+                  <CategoryBadge category={cert.category} />
+                </div>
+                <div className={`text-xs mb-2 ${purposeInfo.color}`}>{purposeInfo.label}</div>
+                {cert.grade_received !== null && (
+                  <div className="text-green font-semibold text-sm">
+                    Grade received: {cert.grader} {cert.grade_received}
+                  </div>
+                )}
+                {cert.notes && (
+                  <div className="text-muted text-xs mt-1 italic">"{cert.notes}"</div>
+                )}
+              </div>
+              <div className="flex flex-col items-end gap-2">
+                <div className="text-[10px] text-muted">{new Date(cert.created_at).toLocaleDateString()}</div>
+                <button
+                  onClick={startEdit}
+                  className="text-xs text-muted hover:text-accent transition-colors border border-border hover:border-accent rounded px-2 py-0.5"
+                >
+                  Edit
+                </button>
+              </div>
             </div>
-            <div className={`text-xs mb-2 ${purposeInfo.color}`}>{purposeInfo.label}</div>
-            {cert.grade_received !== null && (
-              <div className="text-green font-semibold text-sm">
-                Grade received: {cert.grader} {cert.grade_received}
+
+            {/* Scan thumbnails */}
+            {(frontUrl || backUrl) && (
+              <div className="flex gap-3 mt-4">
+                {frontUrl && (
+                  <a href={frontUrl} target="_blank" rel="noreferrer" className="block">
+                    <img src={frontUrl} alt="Front" className="h-28 object-contain rounded border border-border bg-bg" />
+                    <div className="text-[10px] text-muted text-center mt-1">Front</div>
+                  </a>
+                )}
+                {backUrl && (
+                  <a href={backUrl} target="_blank" rel="noreferrer" className="block">
+                    <img src={backUrl} alt="Back" className="h-28 object-contain rounded border border-border bg-bg" />
+                    <div className="text-[10px] text-muted text-center mt-1">Back</div>
+                  </a>
+                )}
               </div>
             )}
-            {cert.notes && (
-              <div className="text-muted text-xs mt-1 italic">"{cert.notes}"</div>
+            {!frontUrl && !backUrl && (
+              <div className="text-muted text-xs mt-3">No scans uploaded.</div>
             )}
-          </div>
-          <div className="text-[10px] text-muted text-right">
-            {new Date(cert.created_at).toLocaleDateString()}
-          </div>
-        </div>
-
-        {/* Scan thumbnails */}
-        {(frontUrl || backUrl) && (
-          <div className="flex gap-3 mt-4">
-            {frontUrl && (
-              <a href={frontUrl} target="_blank" rel="noreferrer" className="block">
-                <img src={frontUrl} alt="Front" className="h-28 object-contain rounded border border-border bg-bg" />
-                <div className="text-[10px] text-muted text-center mt-1">Front</div>
-              </a>
-            )}
-            {backUrl && (
-              <a href={backUrl} target="_blank" rel="noreferrer" className="block">
-                <img src={backUrl} alt="Back" className="h-28 object-contain rounded border border-border bg-bg" />
-                <div className="text-[10px] text-muted text-center mt-1">Back</div>
-              </a>
-            )}
-          </div>
-        )}
-        {!frontUrl && !backUrl && (
-          <div className="text-muted text-xs mt-3">No scans uploaded.</div>
+          </>
         )}
       </div>
 
@@ -150,6 +230,134 @@ export default function CertView() {
         saving={saving}
         inspectionCount={inspections.length}
       />
+    </div>
+  );
+}
+
+// ── Edit cert form ─────────────────────────────────────────────────────────────
+
+function EditCertForm({
+  form,
+  onChange,
+  onSave,
+  onCancel,
+  saving,
+  error,
+}: {
+  form: EditForm;
+  onChange: (patch: Partial<EditForm>) => void;
+  onSave: () => void;
+  onCancel: () => void;
+  saving: boolean;
+  error: string | null;
+}) {
+  const inputCls = "w-full bg-bg border border-border rounded px-3 py-1.5 text-sm text-[#e6edf3] outline-none focus:border-accent";
+  const labelCls = "text-muted text-xs block mb-1";
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-sm font-semibold">Edit Cert</span>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className={labelCls}>Cert Number</label>
+          <input className={inputCls} value={form.cert_number} onChange={(e) => onChange({ cert_number: e.target.value })} />
+        </div>
+        <div>
+          <label className={labelCls}>Grader</label>
+          <select className={inputCls} value={form.grader} onChange={(e) => onChange({ grader: e.target.value })}>
+            <option>PSA</option>
+            <option>CGC</option>
+            <option>BGS</option>
+            <option>SGC</option>
+            <option>ACE</option>
+          </select>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className={labelCls}>Category</label>
+          <select className={inputCls} value={form.category} onChange={(e) => onChange({ category: e.target.value as CertCategory })}>
+            <option value="raw">Raw</option>
+            <option value="psa9">PSA 9</option>
+            <option value="psa10">PSA 10</option>
+            <option value="cgc9">CGC 9</option>
+            <option value="cgc10">CGC 10</option>
+            <option value="bgs9">BGS 9</option>
+            <option value="bgs9pt5">BGS 9.5</option>
+            <option value="bgs10">BGS 10</option>
+          </select>
+        </div>
+        <div>
+          <label className={labelCls}>Purpose</label>
+          <select className={inputCls} value={form.purpose} onChange={(e) => onChange({ purpose: e.target.value as CertPurpose })}>
+            <option value="analytics">Analytics</option>
+            <option value="grading_tracker">My Grading Tracker</option>
+            <option value="buy_and_grade">Buy + Grade</option>
+            <option value="crack_and_regrade">Crack + Regrade</option>
+          </select>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className={labelCls}>Grade Received</label>
+          <input
+            type="number"
+            min={1}
+            max={10}
+            step={0.5}
+            placeholder="leave blank if not yet graded"
+            className={inputCls}
+            value={form.grade_received}
+            onChange={(e) => onChange({ grade_received: e.target.value })}
+          />
+        </div>
+        <div>
+          <label className={labelCls}>Graded At</label>
+          <input
+            type="date"
+            className={inputCls}
+            value={form.graded_at}
+            onChange={(e) => onChange({ graded_at: e.target.value })}
+          />
+        </div>
+      </div>
+
+      <div>
+        <label className={labelCls}>Notes</label>
+        <textarea
+          rows={2}
+          className="w-full bg-bg border border-border rounded px-3 py-1.5 text-sm text-[#e6edf3] outline-none focus:border-accent resize-none"
+          value={form.notes}
+          onChange={(e) => onChange({ notes: e.target.value })}
+          placeholder="optional notes…"
+        />
+      </div>
+
+      {error && (
+        <div className="text-red-400 text-xs">{error}</div>
+      )}
+
+      <div className="flex gap-2">
+        <button
+          onClick={onSave}
+          disabled={saving}
+          className="bg-accent text-bg font-semibold px-4 py-1.5 rounded text-sm hover:bg-accent/90 disabled:opacity-40 transition-colors"
+        >
+          {saving ? "Saving…" : "Save"}
+        </button>
+        <button
+          onClick={onCancel}
+          disabled={saving}
+          className="text-muted hover:text-[#e6edf3] border border-border rounded px-4 py-1.5 text-sm transition-colors"
+        >
+          Cancel
+        </button>
+      </div>
     </div>
   );
 }
