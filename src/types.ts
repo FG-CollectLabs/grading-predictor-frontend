@@ -77,6 +77,14 @@ export interface InspectionRow {
   notes: string | null;
   source: "manual" | "auto";
   created_at: string;
+  corners_defective_cut: number | null;
+  corners_major_whitening: number | null;
+  corners_minor_whitening: number | null;
+  corners_micro_whitening: number | null;
+  edges_whitening: number | null;
+  surface_dead_pixels: number | null;
+  surface_dimples: number | null;
+  surface_print_lines: number | null;
 }
 
 export interface StatRow {
@@ -146,6 +154,14 @@ export interface CreateInspectionRequest {
   edge_right?: EdgeGrade | null;
   notes?: string;
   source?: "manual" | "auto";
+  corners_defective_cut?: number | null;
+  corners_major_whitening?: number | null;
+  corners_minor_whitening?: number | null;
+  corners_micro_whitening?: number | null;
+  edges_whitening?: number | null;
+  surface_dead_pixels?: number | null;
+  surface_dimples?: number | null;
+  surface_print_lines?: number | null;
 }
 
 // Market tracker types (from market.futuregadgetlabs.com)

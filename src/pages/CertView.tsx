@@ -7,9 +7,6 @@ import type {
   CreateInspectionRequest,
   CertCategory,
   CertPurpose,
-  SurfaceGrade,
-  CornerGrade,
-  EdgeGrade,
 } from "../types";
 import { CenteringTool } from "../components/CenteringTool";
 import type { CenteringResult } from "../components/CenteringTool";
@@ -33,29 +30,6 @@ const PURPOSE_LABELS: Record<CertPurpose, { label: string; color: string }> = {
   crack_and_regrade: { label: "Crack + Regrade",     color: "text-orange-400"  },
 };
 
-// ── Grade helpers ─────────────────────────────────────────────────────────────
-
-const CORNER_GRADES: CornerGrade[] = ["sharp", "light_wear", "heavy_wear"];
-const EDGE_GRADES: EdgeGrade[] = ["clean", "light_wear", "heavy_wear", "nick"];
-const SURFACE_GRADES: SurfaceGrade[] = ["clean", "light_scratch", "heavy_scratch", "print_line", "print_dot"];
-
-function gradeColor(g: string | null): string {
-  if (!g || g === "sharp" || g === "clean") return "border-border text-muted bg-transparent";
-  if (g === "light_wear" || g === "light_scratch") return "border-yellow-400/50 text-yellow-400 bg-yellow-400/10";
-  if (g === "heavy_wear" || g === "heavy_scratch" || g === "print_line") return "border-orange-400/50 text-orange-400 bg-orange-400/10";
-  return "border-red-400/50 text-red-400 bg-red-400/10";
-}
-
-function gradeShort(g: string | null): string {
-  if (!g || g === "sharp" || g === "clean") return "—";
-  if (g === "light_wear" || g === "light_scratch") return "LW";
-  if (g === "heavy_wear" || g === "heavy_scratch") return "HW";
-  if (g === "nick") return "Nick";
-  if (g === "print_line") return "PL";
-  if (g === "print_dot") return "PD";
-  return g;
-}
-
 // ── Edit form types ───────────────────────────────────────────────────────────
 
 interface EditForm {
@@ -77,16 +51,14 @@ interface InspForm {
   centering_back_lr: number;
   centering_back_tb: number;
   centering_back_rotation: number;
-  surface_front: SurfaceGrade | null;
-  surface_back: SurfaceGrade | null;
-  corner_tl: CornerGrade | null;
-  corner_tr: CornerGrade | null;
-  corner_bl: CornerGrade | null;
-  corner_br: CornerGrade | null;
-  edge_top: EdgeGrade | null;
-  edge_bottom: EdgeGrade | null;
-  edge_left: EdgeGrade | null;
-  edge_right: EdgeGrade | null;
+  corners_defective_cut: number;
+  corners_major_whitening: number;
+  corners_minor_whitening: number;
+  corners_micro_whitening: number;
+  edges_whitening: number;
+  surface_dead_pixels: number;
+  surface_dimples: number;
+  surface_print_lines: number;
   notes: string;
 }
 
@@ -98,16 +70,14 @@ function defaultForm(latest: InspectionRow | null): InspForm {
     centering_back_lr: latest?.centering_back_lr ?? 50,
     centering_back_tb: latest?.centering_back_tb ?? 50,
     centering_back_rotation: latest?.centering_back_rotation ?? 0,
-    surface_front: latest?.surface_front ?? null,
-    surface_back: latest?.surface_back ?? null,
-    corner_tl: latest?.corner_tl ?? null,
-    corner_tr: latest?.corner_tr ?? null,
-    corner_bl: latest?.corner_bl ?? null,
-    corner_br: latest?.corner_br ?? null,
-    edge_top: latest?.edge_top ?? null,
-    edge_bottom: latest?.edge_bottom ?? null,
-    edge_left: latest?.edge_left ?? null,
-    edge_right: latest?.edge_right ?? null,
+    corners_defective_cut: latest?.corners_defective_cut ?? 0,
+    corners_major_whitening: latest?.corners_major_whitening ?? 0,
+    corners_minor_whitening: latest?.corners_minor_whitening ?? 0,
+    corners_micro_whitening: latest?.corners_micro_whitening ?? 0,
+    edges_whitening: latest?.edges_whitening ?? 0,
+    surface_dead_pixels: latest?.surface_dead_pixels ?? 0,
+    surface_dimples: latest?.surface_dimples ?? 0,
+    surface_print_lines: latest?.surface_print_lines ?? 0,
     notes: latest?.notes ?? "",
   };
 }
@@ -121,16 +91,14 @@ function toRequest(form: InspForm): CreateInspectionRequest {
     centering_back_lr: form.centering_back_lr,
     centering_back_tb: form.centering_back_tb,
     centering_back_rotation: form.centering_back_rotation || null,
-    surface_front: form.surface_front,
-    surface_back: form.surface_back,
-    corner_tl: form.corner_tl,
-    corner_tr: form.corner_tr,
-    corner_bl: form.corner_bl,
-    corner_br: form.corner_br,
-    edge_top: form.edge_top,
-    edge_bottom: form.edge_bottom,
-    edge_left: form.edge_left,
-    edge_right: form.edge_right,
+    corners_defective_cut: form.corners_defective_cut || null,
+    corners_major_whitening: form.corners_major_whitening || null,
+    corners_minor_whitening: form.corners_minor_whitening || null,
+    corners_micro_whitening: form.corners_micro_whitening || null,
+    edges_whitening: form.edges_whitening || null,
+    surface_dead_pixels: form.surface_dead_pixels || null,
+    surface_dimples: form.surface_dimples || null,
+    surface_print_lines: form.surface_print_lines || null,
     notes: form.notes || undefined,
   };
 }
@@ -543,7 +511,7 @@ function InspectionPanel({
         {latest && hasAnyDefect(latest) && (
           <section>
             <SectionHeader>Latest Defects</SectionHeader>
-            <CardDefectMap form={defectFormFromRow(latest)} onChange={() => {}} readOnly />
+            <CountSliderTable form={defaultForm(latest)} onChange={() => {}} readOnly />
           </section>
         )}
 
@@ -582,10 +550,10 @@ function InspectionPanel({
           </div>
         </section>
 
-        {/* Defect map */}
+        {/* Defect counts */}
         <section>
           <SectionHeader>Defects</SectionHeader>
-          <CardDefectMap form={form} onChange={patch} />
+          <CountSliderTable form={form} onChange={patch} />
         </section>
 
         {/* Notes */}
@@ -610,36 +578,32 @@ function InspectionPanel({
 }
 
 function hasAnyDefect(r: InspectionRow): boolean {
-  return !!(r.corner_tl || r.corner_tr || r.corner_bl || r.corner_br ||
-            r.edge_top || r.edge_bottom || r.edge_left || r.edge_right ||
-            r.surface_front || r.surface_back);
+  return (
+    (r.corners_defective_cut ?? 0) > 0 ||
+    (r.corners_major_whitening ?? 0) > 0 ||
+    (r.corners_minor_whitening ?? 0) > 0 ||
+    (r.corners_micro_whitening ?? 0) > 0 ||
+    (r.edges_whitening ?? 0) > 0 ||
+    (r.surface_dead_pixels ?? 0) > 0 ||
+    (r.surface_dimples ?? 0) > 0 ||
+    (r.surface_print_lines ?? 0) > 0
+  );
 }
 
-function defectFormFromRow(r: InspectionRow): InspForm {
-  return {
-    centering_front_lr: r.centering_front_lr ?? 50,
-    centering_front_tb: r.centering_front_tb ?? 50,
-    centering_front_rotation: r.centering_front_rotation ?? 0,
-    centering_back_lr: r.centering_back_lr ?? 50,
-    centering_back_tb: r.centering_back_tb ?? 50,
-    centering_back_rotation: r.centering_back_rotation ?? 0,
-    surface_front: r.surface_front as SurfaceGrade | null,
-    surface_back: r.surface_back as SurfaceGrade | null,
-    corner_tl: r.corner_tl as CornerGrade | null,
-    corner_tr: r.corner_tr as CornerGrade | null,
-    corner_bl: r.corner_bl as CornerGrade | null,
-    corner_br: r.corner_br as CornerGrade | null,
-    edge_top: r.edge_top as EdgeGrade | null,
-    edge_bottom: r.edge_bottom as EdgeGrade | null,
-    edge_left: r.edge_left as EdgeGrade | null,
-    edge_right: r.edge_right as EdgeGrade | null,
-    notes: r.notes ?? "",
-  };
-}
+// ── Count slider table ────────────────────────────────────────────────────────
 
-// ── Card defect map ───────────────────────────────────────────────────────────
+const COUNT_DEFECTS = [
+  { key: "corners_defective_cut",   label: "Defective Cut",   group: "Corners", max: 4 },
+  { key: "corners_major_whitening", label: "Major Whitening", group: "Corners", max: 4 },
+  { key: "corners_minor_whitening", label: "Minor Whitening", group: "Corners", max: 4 },
+  { key: "corners_micro_whitening", label: "Micro Whitening", group: "Corners", max: 4 },
+  { key: "edges_whitening",         label: "Whitening",       group: "Edges",   max: 4 },
+  { key: "surface_dead_pixels",     label: "Dead Pixels",     group: "Surface", max: 5 },
+  { key: "surface_dimples",         label: "Dimples",         group: "Surface", max: 5 },
+  { key: "surface_print_lines",     label: "Print Lines",     group: "Surface", max: 5 },
+] as const;
 
-function CardDefectMap({
+function CountSliderTable({
   form,
   onChange,
   readOnly = false,
@@ -648,121 +612,46 @@ function CardDefectMap({
   onChange: (p: Partial<InspForm>) => void;
   readOnly?: boolean;
 }) {
-  const [surfaceSide, setSurfaceSide] = useState<"front" | "back">("front");
-
-  function cycleCorner(key: keyof InspForm) {
-    if (readOnly) return;
-    const cur = (form[key] as CornerGrade | null) ?? "sharp";
-    const idx = CORNER_GRADES.indexOf(cur);
-    onChange({ [key]: CORNER_GRADES[(idx + 1) % CORNER_GRADES.length] });
-  }
-
-  function cycleEdge(key: keyof InspForm) {
-    if (readOnly) return;
-    const cur = (form[key] as EdgeGrade | null) ?? "clean";
-    const idx = EDGE_GRADES.indexOf(cur);
-    onChange({ [key]: EDGE_GRADES[(idx + 1) % EDGE_GRADES.length] });
-  }
-
-  function cycleSurface(key: keyof InspForm) {
-    if (readOnly) return;
-    const cur = (form[key] as SurfaceGrade | null) ?? "clean";
-    const idx = SURFACE_GRADES.indexOf(cur);
-    onChange({ [key]: SURFACE_GRADES[(idx + 1) % SURFACE_GRADES.length] });
-  }
-
-  const surfaceKey = surfaceSide === "front" ? "surface_front" : "surface_back";
-  const surfaceVal = form[surfaceKey] as SurfaceGrade | null;
-
-  const cornerBtn = (key: keyof InspForm, pos: string) => {
-    const g = form[key] as CornerGrade | null;
-    const color = gradeColor(g);
-    return (
-      <button
-        key={key}
-        onClick={() => cycleCorner(key)}
-        title={pos}
-        disabled={readOnly && (!g || g === "sharp")}
-        className={`w-10 h-10 rounded border text-[10px] font-semibold transition-colors ${color} ${
-          !readOnly ? "hover:opacity-80 cursor-pointer" : "cursor-default"
-        }`}
-      >
-        {gradeShort(g)}
-      </button>
-    );
-  };
-
-  const edgeBtn = (key: keyof InspForm, label: string, horiz: boolean) => {
-    const g = form[key] as EdgeGrade | null;
-    const color = gradeColor(g);
-    return (
-      <button
-        key={key}
-        onClick={() => cycleEdge(key)}
-        title={label}
-        disabled={readOnly && (!g || g === "clean")}
-        className={`${horiz ? "h-10 w-full" : "w-10 h-full min-h-[2.5rem]"} rounded border text-[10px] font-semibold transition-colors ${color} ${
-          !readOnly ? "hover:opacity-80 cursor-pointer" : "cursor-default"
-        }`}
-      >
-        {gradeShort(g) === "—" ? label : gradeShort(g)}
-      </button>
-    );
-  };
+  const groups = ["Corners", "Edges", "Surface"] as const;
 
   return (
-    <div className="flex gap-4 items-start">
-      {/* Card grid */}
-      <div className="flex-shrink-0">
-        {/* Row 1: TL, top edge, TR */}
-        <div className="flex gap-1 mb-1">
-          {cornerBtn("corner_tl", "Top-Left")}
-          {edgeBtn("edge_top", "Top", true)}
-          {cornerBtn("corner_tr", "Top-Right")}
-        </div>
-        {/* Row 2: left edge, surface, right edge */}
-        <div className="flex gap-1 mb-1 items-stretch">
-          {edgeBtn("edge_left", "L", false)}
-          <div
-            onClick={() => cycleSurface(surfaceKey)}
-            className={`flex-1 min-w-[5rem] h-16 rounded border flex flex-col items-center justify-center gap-0.5 transition-colors ${gradeColor(surfaceVal)} ${
-              !readOnly ? "hover:opacity-80 cursor-pointer" : "cursor-default"
-            }`}
-          >
-            <div className="flex gap-1 mb-0.5">
-              {(["front", "back"] as const).map((s) => (
-                <button
-                  key={s}
-                  onClick={(e) => { e.stopPropagation(); setSurfaceSide(s); }}
-                  className={`text-[9px] px-1 py-0.5 rounded transition-colors ${
-                    surfaceSide === s ? "bg-accent/20 text-accent" : "text-muted hover:text-[#e6edf3]"
-                  }`}
-                >
-                  {s}
-                </button>
-              ))}
-            </div>
-            <span className="text-[10px] font-semibold">{gradeShort(surfaceVal)}</span>
+    <div className="space-y-4">
+      {groups.map((group) => (
+        <div key={group}>
+          <div className="text-[10px] text-muted uppercase tracking-widest mb-2">{group}</div>
+          <div className="space-y-2">
+            {COUNT_DEFECTS.filter((d) => d.group === group).map(({ key, label, max }) => {
+              const val = (form[key as keyof InspForm] as number) ?? 0;
+              const highlight = val > 0;
+              return (
+                <div key={key} className="flex items-center gap-3">
+                  <span className="text-xs text-muted w-32 flex-shrink-0">{label}</span>
+                  <span className={`text-xs font-mono w-8 text-right flex-shrink-0 ${highlight ? "text-yellow-400" : "text-muted"}`}>
+                    {val}/{max}
+                  </span>
+                  {readOnly ? (
+                    <div className="flex-1 h-1.5 bg-border/30 rounded-full">
+                      <div
+                        className={`h-1.5 rounded-full transition-all ${highlight ? "bg-yellow-400" : "bg-border"}`}
+                        style={{ width: `${(val / max) * 100}%` }}
+                      />
+                    </div>
+                  ) : (
+                    <input
+                      type="range"
+                      min={0}
+                      max={max}
+                      value={val}
+                      onChange={(e) => onChange({ [key]: Number(e.target.value) } as Partial<InspForm>)}
+                      className="flex-1 accent-[#58a6ff]"
+                    />
+                  )}
+                </div>
+              );
+            })}
           </div>
-          {edgeBtn("edge_right", "R", false)}
         </div>
-        {/* Row 3: BL, bottom edge, BR */}
-        <div className="flex gap-1">
-          {cornerBtn("corner_bl", "Bottom-Left")}
-          {edgeBtn("edge_bottom", "Bot", true)}
-          {cornerBtn("corner_br", "Bottom-Right")}
-        </div>
-      </div>
-
-      {/* Legend */}
-      {!readOnly && (
-        <div className="text-[10px] text-muted space-y-1 pt-1">
-          <div className="font-semibold text-[#e6edf3] mb-2">Click to cycle</div>
-          <div>Corners: sharp → light → heavy</div>
-          <div>Edges: clean → light → heavy → nick</div>
-          <div>Surface: clean → scratch → PL → PD</div>
-        </div>
-      )}
+      ))}
     </div>
   );
 }

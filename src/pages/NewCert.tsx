@@ -406,14 +406,6 @@ export default function NewCert() {
 
 // ── Inspection Form ───────────────────────────────────────────────────────────
 
-type CornerGrade = "sharp" | "light_wear" | "heavy_wear";
-type EdgeGrade = "clean" | "light_wear" | "heavy_wear" | "nick";
-type SurfaceGrade = "clean" | "light_scratch" | "heavy_scratch" | "print_line" | "print_dot";
-
-const CORNER_GRADES: CornerGrade[] = ["sharp", "light_wear", "heavy_wear"];
-const EDGE_GRADES: EdgeGrade[] = ["clean", "light_wear", "heavy_wear", "nick"];
-const SURFACE_GRADES: SurfaceGrade[] = ["clean", "light_scratch", "heavy_scratch", "print_line", "print_dot"];
-
 interface InspForm {
   centering_front_lr: number;
   centering_front_tb: number;
@@ -421,35 +413,27 @@ interface InspForm {
   centering_back_lr: number;
   centering_back_tb: number;
   centering_back_rotation: number;
-  surface_front: SurfaceGrade | null;
-  surface_back: SurfaceGrade | null;
-  corner_tl: CornerGrade | null;
-  corner_tr: CornerGrade | null;
-  corner_bl: CornerGrade | null;
-  corner_br: CornerGrade | null;
-  edge_top: EdgeGrade | null;
-  edge_bottom: EdgeGrade | null;
-  edge_left: EdgeGrade | null;
-  edge_right: EdgeGrade | null;
+  corners_defective_cut: number;
+  corners_major_whitening: number;
+  corners_minor_whitening: number;
+  corners_micro_whitening: number;
+  edges_whitening: number;
+  surface_dead_pixels: number;
+  surface_dimples: number;
+  surface_print_lines: number;
   notes: string;
 }
 
-function gradeColor(g: string | null): string {
-  if (!g || g === "sharp" || g === "clean") return "border-border text-muted bg-transparent";
-  if (g === "light_wear" || g === "light_scratch") return "border-yellow-400/50 text-yellow-400 bg-yellow-400/10";
-  if (g === "heavy_wear" || g === "heavy_scratch" || g === "print_line") return "border-orange-400/50 text-orange-400 bg-orange-400/10";
-  return "border-red-400/50 text-red-400 bg-red-400/10";
-}
-
-function gradeShort(g: string | null): string {
-  if (!g || g === "sharp" || g === "clean") return "—";
-  if (g === "light_wear" || g === "light_scratch") return "LW";
-  if (g === "heavy_wear" || g === "heavy_scratch") return "HW";
-  if (g === "nick") return "Nick";
-  if (g === "print_line") return "PL";
-  if (g === "print_dot") return "PD";
-  return g;
-}
+const COUNT_DEFECTS = [
+  { key: "corners_defective_cut",   label: "Defective Cut",   group: "Corners", max: 4 },
+  { key: "corners_major_whitening", label: "Major Whitening", group: "Corners", max: 4 },
+  { key: "corners_minor_whitening", label: "Minor Whitening", group: "Corners", max: 4 },
+  { key: "corners_micro_whitening", label: "Micro Whitening", group: "Corners", max: 4 },
+  { key: "edges_whitening",         label: "Whitening",       group: "Edges",   max: 4 },
+  { key: "surface_dead_pixels",     label: "Dead Pixels",     group: "Surface", max: 5 },
+  { key: "surface_dimples",         label: "Dimples",         group: "Surface", max: 5 },
+  { key: "surface_print_lines",     label: "Print Lines",     group: "Surface", max: 5 },
+] as const;
 
 function InspectionForm({
   onSave,
@@ -471,55 +455,18 @@ function InspectionForm({
     centering_back_lr: backCentering?.lr ?? DEFAULT_CENTERING.lr,
     centering_back_tb: backCentering?.tb ?? DEFAULT_CENTERING.tb,
     centering_back_rotation: backCentering?.rotationDeg ?? 0,
-    surface_front: null, surface_back: null,
-    corner_tl: null, corner_tr: null, corner_bl: null, corner_br: null,
-    edge_top: null, edge_bottom: null, edge_left: null, edge_right: null,
+    corners_defective_cut: 0,
+    corners_major_whitening: 0,
+    corners_minor_whitening: 0,
+    corners_micro_whitening: 0,
+    edges_whitening: 0,
+    surface_dead_pixels: 0,
+    surface_dimples: 0,
+    surface_print_lines: 0,
     notes: "",
   });
-  const [surfaceSide, setSurfaceSide] = useState<"front" | "back">("front");
 
   function patch(p: Partial<InspForm>) { setForm((prev) => ({ ...prev, ...p })); }
-
-  function cycleCorner(key: keyof InspForm) {
-    const cur = (form[key] as CornerGrade | null) ?? "sharp";
-    const idx = CORNER_GRADES.indexOf(cur);
-    patch({ [key]: CORNER_GRADES[(idx + 1) % CORNER_GRADES.length] });
-  }
-
-  function cycleEdge(key: keyof InspForm) {
-    const cur = (form[key] as EdgeGrade | null) ?? "clean";
-    const idx = EDGE_GRADES.indexOf(cur);
-    patch({ [key]: EDGE_GRADES[(idx + 1) % EDGE_GRADES.length] });
-  }
-
-  function cycleSurface(key: keyof InspForm) {
-    const cur = (form[key] as SurfaceGrade | null) ?? "clean";
-    const idx = SURFACE_GRADES.indexOf(cur);
-    patch({ [key]: SURFACE_GRADES[(idx + 1) % SURFACE_GRADES.length] });
-  }
-
-  const surfaceKey = surfaceSide === "front" ? "surface_front" : "surface_back";
-  const surfaceVal = form[surfaceKey] as SurfaceGrade | null;
-
-  const cornerBtn = (key: keyof InspForm, pos: string) => {
-    const g = form[key] as CornerGrade | null;
-    return (
-      <button key={key} onClick={() => cycleCorner(key)} title={pos}
-        className={`w-10 h-10 rounded border text-[10px] font-semibold hover:opacity-80 transition-colors ${gradeColor(g)}`}>
-        {gradeShort(g)}
-      </button>
-    );
-  };
-
-  const edgeBtn = (key: keyof InspForm, label: string, horiz: boolean) => {
-    const g = form[key] as EdgeGrade | null;
-    return (
-      <button key={key} onClick={() => cycleEdge(key)} title={label}
-        className={`${horiz ? "h-10 w-full" : "w-10 h-full min-h-[2.5rem]"} rounded border text-[10px] font-semibold hover:opacity-80 transition-colors ${gradeColor(g)}`}>
-        {gradeShort(g) === "—" ? label : gradeShort(g)}
-      </button>
-    );
-  };
 
   function toRequest(): CreateInspectionRequest {
     return {
@@ -530,16 +477,14 @@ function InspectionForm({
       centering_back_lr: form.centering_back_lr,
       centering_back_tb: form.centering_back_tb,
       centering_back_rotation: form.centering_back_rotation || null,
-      surface_front: form.surface_front,
-      surface_back: form.surface_back,
-      corner_tl: form.corner_tl,
-      corner_tr: form.corner_tr,
-      corner_bl: form.corner_bl,
-      corner_br: form.corner_br,
-      edge_top: form.edge_top,
-      edge_bottom: form.edge_bottom,
-      edge_left: form.edge_left,
-      edge_right: form.edge_right,
+      corners_defective_cut: form.corners_defective_cut || null,
+      corners_major_whitening: form.corners_major_whitening || null,
+      corners_minor_whitening: form.corners_minor_whitening || null,
+      corners_micro_whitening: form.corners_micro_whitening || null,
+      edges_whitening: form.edges_whitening || null,
+      surface_dead_pixels: form.surface_dead_pixels || null,
+      surface_dimples: form.surface_dimples || null,
+      surface_print_lines: form.surface_print_lines || null,
       notes: form.notes || undefined,
     };
   }
@@ -573,49 +518,10 @@ function InspectionForm({
         </div>
       </section>
 
-      {/* Defect map */}
+      {/* Defect counts */}
       <section>
         <SectionHeader>Defects</SectionHeader>
-        <div className="flex gap-4 items-start">
-          <div className="flex-shrink-0">
-            <div className="flex gap-1 mb-1">
-              {cornerBtn("corner_tl", "Top-Left")}
-              {edgeBtn("edge_top", "Top", true)}
-              {cornerBtn("corner_tr", "Top-Right")}
-            </div>
-            <div className="flex gap-1 mb-1 items-stretch">
-              {edgeBtn("edge_left", "L", false)}
-              <div
-                onClick={() => cycleSurface(surfaceKey)}
-                className={`flex-1 min-w-[5rem] h-16 rounded border flex flex-col items-center justify-center gap-0.5 cursor-pointer hover:opacity-80 transition-colors ${gradeColor(surfaceVal)}`}
-              >
-                <div className="flex gap-1 mb-0.5" onClick={(e) => e.stopPropagation()}>
-                  {(["front", "back"] as const).map((s) => (
-                    <button key={s} onClick={() => setSurfaceSide(s)}
-                      className={`text-[9px] px-1 py-0.5 rounded transition-colors ${
-                        surfaceSide === s ? "bg-accent/20 text-accent" : "text-muted hover:text-[#e6edf3]"
-                      }`}>
-                      {s}
-                    </button>
-                  ))}
-                </div>
-                <span className="text-[10px] font-semibold">{gradeShort(surfaceVal)}</span>
-              </div>
-              {edgeBtn("edge_right", "R", false)}
-            </div>
-            <div className="flex gap-1">
-              {cornerBtn("corner_bl", "Bottom-Left")}
-              {edgeBtn("edge_bottom", "Bot", true)}
-              {cornerBtn("corner_br", "Bottom-Right")}
-            </div>
-          </div>
-          <div className="text-[10px] text-muted space-y-1 pt-1">
-            <div className="font-semibold text-[#e6edf3] mb-2">Click to cycle</div>
-            <div>Corners: sharp → light → heavy</div>
-            <div>Edges: clean → light → heavy → nick</div>
-            <div>Surface: clean → scratch → PL → PD</div>
-          </div>
-        </div>
+        <CountSliderTable form={form} onChange={patch} />
       </section>
 
       {/* Notes */}
@@ -637,6 +543,50 @@ function InspectionForm({
           Skip for now
         </button>
       </div>
+    </div>
+  );
+}
+
+// ── Count slider table ────────────────────────────────────────────────────────
+
+function CountSliderTable({
+  form,
+  onChange,
+}: {
+  form: InspForm;
+  onChange: (p: Partial<InspForm>) => void;
+}) {
+  const groups = ["Corners", "Edges", "Surface"] as const;
+
+  return (
+    <div className="space-y-4">
+      {groups.map((group) => (
+        <div key={group}>
+          <div className="text-[10px] text-muted uppercase tracking-widest mb-2">{group}</div>
+          <div className="space-y-2">
+            {COUNT_DEFECTS.filter((d) => d.group === group).map(({ key, label, max }) => {
+              const val = (form[key as keyof InspForm] as number) ?? 0;
+              const highlight = val > 0;
+              return (
+                <div key={key} className="flex items-center gap-3">
+                  <span className="text-xs text-muted w-32 flex-shrink-0">{label}</span>
+                  <span className={`text-xs font-mono w-8 text-right flex-shrink-0 ${highlight ? "text-yellow-400" : "text-muted"}`}>
+                    {val}/{max}
+                  </span>
+                  <input
+                    type="range"
+                    min={0}
+                    max={max}
+                    value={val}
+                    onChange={(e) => onChange({ [key]: Number(e.target.value) } as Partial<InspForm>)}
+                    className="flex-1 accent-[#58a6ff]"
+                  />
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
