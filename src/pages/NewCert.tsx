@@ -9,6 +9,33 @@ import type {
 } from "../types";
 import { CenteringTool } from "../components/CenteringTool";
 import type { CenteringResult } from "../components/CenteringTool";
+import { POKEMON_SETS } from "../data/sets";
+
+const GRADER_CATEGORIES: Record<string, Array<{ value: CertCategory; label: string }>> = {
+  PSA: [
+    { value: "raw",   label: "Raw / Pre-grade" },
+    { value: "psa9",  label: "PSA 9"            },
+    { value: "psa10", label: "PSA 10"           },
+  ],
+  CGC: [
+    { value: "raw",   label: "Raw / Pre-grade" },
+    { value: "cgc9",  label: "CGC 9"            },
+    { value: "cgc10", label: "CGC 10"           },
+  ],
+  BGS: [
+    { value: "raw",     label: "Raw / Pre-grade" },
+    { value: "bgs9",    label: "BGS 9"            },
+    { value: "bgs9pt5", label: "BGS 9.5"          },
+    { value: "bgs10",   label: "BGS 10"           },
+  ],
+  "N/A": [
+    { value: "raw", label: "Raw" },
+  ],
+};
+
+function slugify(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9]/g, "").substring(0, 12);
+}
 
 type Step = "card" | "cert" | "inspection";
 
@@ -25,11 +52,14 @@ export default function NewCert() {
   const [saving, setSaving] = useState(false);
 
   // Card creation form
-  const [newCard, setNewCard] = useState({
-    game: "", set_code: "", set_name: "", card_name: "", card_number: "",
-    image_url: "", market_display_key: "",
-  });
   const [cardMode, setCardMode] = useState<"existing" | "new">("existing");
+  const [cardGame, setCardGame] = useState("pokemon");
+  const [cardSetName, setCardSetName] = useState("");
+  const [cardSetCode, setCardSetCode] = useState("");
+  const [cardName, setCardName] = useState("");
+  const [cardNumber, setCardNumber] = useState("");
+  const [cardImageFile, setCardImageFile] = useState<File | null>(null);
+  const [cardImagePreview, setCardImagePreview] = useState<string | null>(null);
 
   // Cert form
   const [certNumber, setCertNumber] = useState("");
@@ -57,11 +87,16 @@ export default function NewCert() {
     try {
       if (cardMode === "new") {
         const card = await api.createCard({
-          ...newCard,
-          image_url: newCard.image_url || undefined,
-          market_display_key: newCard.market_display_key || undefined,
+          game: cardGame,
+          set_code: cardSetCode || slugify(cardSetName),
+          set_name: cardSetName,
+          card_name: cardName,
+          card_number: cardNumber,
         });
         setSelectedCardId(card.id);
+        if (cardImageFile) {
+          await api.uploadCardImage(card.id, cardImageFile).catch(() => null);
+        }
       }
       setStep("cert");
     } catch (e) {
@@ -159,35 +194,91 @@ export default function NewCert() {
           </div>
 
           {cardMode === "existing" ? (
-            <div>
-              <select
-                value={selectedCardId ?? ""}
-                onChange={(e) => setSelectedCardId(Number(e.target.value))}
-                className="w-full bg-bg border border-border rounded px-3 py-2 text-sm text-[#e6edf3] outline-none focus:border-accent"
-              >
-                <option value="">Select a card…</option>
-                {cards.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.game} · {c.set_name} · {c.card_name} #{c.card_number}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <select
+              value={selectedCardId ?? ""}
+              onChange={(e) => setSelectedCardId(Number(e.target.value))}
+              className="w-full bg-bg border border-border rounded px-3 py-2 text-sm text-[#e6edf3] outline-none focus:border-accent"
+            >
+              <option value="">Select a card…</option>
+              {cards.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.game} · {c.set_name} · {c.card_name} #{c.card_number}
+                </option>
+              ))}
+            </select>
           ) : (
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Game" value={newCard.game} onChange={(v) => setNewCard((p) => ({ ...p, game: v }))} placeholder="pokemon" />
-              <Field label="Set Code" value={newCard.set_code} onChange={(v) => setNewCard((p) => ({ ...p, set_code: v }))} placeholder="sv4pt5" />
-              <Field label="Set Name" value={newCard.set_name} onChange={(v) => setNewCard((p) => ({ ...p, set_name: v }))} placeholder="Paldean Fates" className="col-span-2" />
-              <Field label="Card Name" value={newCard.card_name} onChange={(v) => setNewCard((p) => ({ ...p, card_name: v }))} placeholder="Charizard ex" />
-              <Field label="Card Number" value={newCard.card_number} onChange={(v) => setNewCard((p) => ({ ...p, card_number: v }))} placeholder="54" />
-              <Field label="Image URL (optional)" value={newCard.image_url} onChange={(v) => setNewCard((p) => ({ ...p, image_url: v }))} placeholder="https://…" className="col-span-2" />
-              <Field label="Market Display Key (optional)" value={newCard.market_display_key} onChange={(v) => setNewCard((p) => ({ ...p, market_display_key: v }))} placeholder="pokemon_sv4pt5_054" className="col-span-2" />
+            <div className="space-y-3">
+              {/* Game */}
+              <div>
+                <label className="text-muted text-xs block mb-1">Game</label>
+                <select
+                  value={cardGame}
+                  onChange={(e) => { setCardGame(e.target.value); setCardSetName(""); setCardSetCode(""); }}
+                  className="w-full bg-bg border border-border rounded px-3 py-2 text-sm text-[#e6edf3] outline-none focus:border-accent"
+                >
+                  <option value="pokemon">Pokémon</option>
+                  <option value="magic">Magic: The Gathering</option>
+                  <option value="weiss">Weiss Schwarz</option>
+                </select>
+              </div>
+
+              {/* Set */}
+              <div>
+                <label className="text-muted text-xs block mb-1">Set</label>
+                {cardGame === "pokemon" ? (
+                  <select
+                    value={cardSetCode}
+                    onChange={(e) => {
+                      const code = e.target.value;
+                      const found = POKEMON_SETS.flatMap((g) => g.sets).find((s) => s.code === code);
+                      setCardSetCode(code);
+                      setCardSetName(found?.name ?? "");
+                    }}
+                    className="w-full bg-bg border border-border rounded px-3 py-2 text-sm text-[#e6edf3] outline-none focus:border-accent"
+                  >
+                    <option value="">Select a set…</option>
+                    {POKEMON_SETS.map((era) => (
+                      <optgroup key={era.era} label={era.era}>
+                        {era.sets.map((s) => (
+                          <option key={s.code} value={s.code}>{s.name}</option>
+                        ))}
+                      </optgroup>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    type="text"
+                    value={cardSetName}
+                    onChange={(e) => setCardSetName(e.target.value)}
+                    placeholder={cardGame === "magic" ? "e.g. Bloomburrow" : "e.g. Hololive Production Vol.2"}
+                    className="w-full bg-bg border border-border rounded px-3 py-2 text-sm text-[#e6edf3] placeholder-muted outline-none focus:border-accent"
+                  />
+                )}
+              </div>
+
+              {/* Card name + number */}
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Card Name" value={cardName} onChange={setCardName} placeholder="Charizard ex" />
+                <Field label="Card Number" value={cardNumber} onChange={setCardNumber} placeholder="54" />
+              </div>
+
+              {/* Card image */}
+              <ImageDropZone
+                label="Card image (optional)"
+                onChange={(f) => {
+                  setCardImageFile(f);
+                  setCardImagePreview((prev) => { if (prev) URL.revokeObjectURL(prev); return f ? URL.createObjectURL(f) : null; });
+                }}
+              />
+              {cardImagePreview && (
+                <img src={cardImagePreview} alt="card preview" className="h-24 object-contain rounded border border-border" />
+              )}
             </div>
           )}
 
           <button
             onClick={handleCardStep}
-            disabled={saving || (cardMode === "existing" && !selectedCardId)}
+            disabled={saving || (cardMode === "existing" && !selectedCardId) || (cardMode === "new" && (!cardSetName || !cardName || !cardNumber))}
             className="mt-5 bg-accent text-bg font-semibold px-4 py-2 rounded text-sm hover:bg-accent/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
             {saving ? "Saving…" : "Continue →"}
@@ -205,15 +296,19 @@ export default function NewCert() {
               <label className="text-muted text-xs block mb-1">Grader</label>
               <select
                 value={grader}
-                onChange={(e) => setGrader(e.target.value)}
+                onChange={(e) => {
+                  const g = e.target.value;
+                  setGrader(g);
+                  setCategory(GRADER_CATEGORIES[g]?.[0]?.value ?? "raw");
+                }}
                 className="w-full bg-bg border border-border rounded px-3 py-2 text-sm text-[#e6edf3] outline-none focus:border-accent"
               >
                 <option>PSA</option>
                 <option>CGC</option>
                 <option>BGS</option>
+                <option>N/A</option>
               </select>
             </div>
-            <Field label="Notes (optional)" value={certNotes} onChange={setCertNotes} placeholder="raw from binder" />
             <div>
               <label className="text-muted text-xs block mb-1">Category</label>
               <select
@@ -221,24 +316,37 @@ export default function NewCert() {
                 onChange={(e) => setCategory(e.target.value as CertCategory)}
                 className="w-full bg-bg border border-border rounded px-3 py-2 text-sm text-[#e6edf3] outline-none focus:border-accent"
               >
-                <option value="raw">Raw</option>
-                <option value="psa9">PSA 9</option>
-                <option value="psa10">PSA 10</option>
-                <option value="cgc9">CGC 9</option>
-                <option value="cgc10">CGC 10</option>
+                {(GRADER_CATEGORIES[grader] ?? GRADER_CATEGORIES["N/A"]).map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
               </select>
             </div>
-            <div>
-              <label className="text-muted text-xs block mb-1">Purpose</label>
-              <select
-                value={purpose}
-                onChange={(e) => setPurpose(e.target.value as CertPurpose)}
-                className="w-full bg-bg border border-border rounded px-3 py-2 text-sm text-[#e6edf3] outline-none focus:border-accent"
-              >
-                <option value="analytics">Analytics</option>
-                <option value="buy_and_grade">Buy &amp; Grade</option>
-                <option value="crack_and_regrade">Crack &amp; Regrade</option>
-              </select>
+            <Field label="Notes (optional)" value={certNotes} onChange={setCertNotes} placeholder="raw from binder" className="col-span-2" />
+            <div className="col-span-2">
+              <label className="text-muted text-xs block mb-2">Purpose</label>
+              <div className="grid grid-cols-2 gap-2">
+                {(["analytics", "grading_tracker"] as const).map((p) => (
+                  <button
+                    key={p}
+                    type="button"
+                    onClick={() => setPurpose(p)}
+                    className={`text-left border rounded p-3 transition-colors ${
+                      purpose === p
+                        ? "border-accent bg-accent/10"
+                        : "border-border hover:border-[#8b949e]"
+                    }`}
+                  >
+                    <div className={`text-xs font-semibold mb-0.5 ${purpose === p ? "text-accent" : "text-[#e6edf3]"}`}>
+                      {p === "analytics" ? "Analytics" : "My Grading Tracker"}
+                    </div>
+                    <div className="text-[10px] text-muted">
+                      {p === "analytics"
+                        ? "Certs I don't own — building the dataset"
+                        : "Cards I own, submitting, or tracking"}
+                    </div>
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 

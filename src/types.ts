@@ -88,8 +88,8 @@ export interface StatRow {
 export type SurfaceGrade = "clean" | "light_scratch" | "heavy_scratch" | "print_line" | "print_dot";
 export type CornerGrade = "sharp" | "light_wear" | "heavy_wear";
 export type EdgeGrade = "clean" | "light_wear" | "heavy_wear" | "nick";
-export type CertCategory = "raw" | "psa9" | "psa10" | "cgc9" | "cgc10";
-export type CertPurpose = "analytics" | "buy_and_grade" | "crack_and_regrade";
+export type CertCategory = "raw" | "psa9" | "psa10" | "cgc9" | "cgc10" | "bgs9" | "bgs9pt5" | "bgs10";
+export type CertPurpose = "analytics" | "grading_tracker" | "buy_and_grade" | "crack_and_regrade";
 
 export interface CertFullDetail {
   id: number;

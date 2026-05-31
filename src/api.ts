@@ -64,6 +64,24 @@ export const api = {
   getCardStats: (id: number) => get<StatRow[]>(`/v1/cards/${id}/stats`),
   listCertsForCard: (id: number) => get<CertRow[]>(`/v1/cards/${id}/certs`),
   createCard: (req: CreateCardRequest) => post<CardDetail>("/v1/cards", req),
+  deleteCard: async (id: number) => {
+    const res = await fetch(`${BASE}/v1/cards/${id}`, {
+      method: "DELETE",
+      headers: authHeaders(),
+    });
+    if (!res.ok) throw new Error(`DELETE /v1/cards/${id}: ${res.status}`);
+  },
+  uploadCardImage: async (cardId: number, file: File) => {
+    const form = new FormData();
+    form.append("image", file);
+    const res = await fetch(`${BASE}/v1/cards/${cardId}/image`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: form,
+    });
+    if (!res.ok) throw new Error(`card image upload: ${res.status}`);
+    return res.json();
+  },
 
   createCert: (req: CreateCertRequest) => post<{ id: number; cert_number: string }>("/v1/certs", req),
   getCert: (id: number) => get<CertFullDetail>(`/v1/certs/${id}`),

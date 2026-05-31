@@ -14,6 +14,7 @@ import type {
 export default function CardDetail() {
   const { id } = useParams<{ id: string }>();
   const cardId = Number(id);
+  const navigate = useNavigate();
 
   const [card, setCard] = useState<CardDetailType | null>(null);
   const [certs, setCerts] = useState<CertRow[]>([]);
@@ -21,6 +22,8 @@ export default function CardDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<"certs" | "buckets">("certs");
+  const [deleting, setDeleting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const [marketData, setMarketData] = useState<GradedMarketData | null>(null);
   const [gemData, setGemData] = useState<GemRateData | null>(null);
@@ -48,6 +51,18 @@ export default function CardDetail() {
       .finally(() => setLoading(false));
   }, [cardId]);
 
+  async function handleDelete() {
+    setDeleting(true);
+    try {
+      await api.deleteCard(cardId);
+      navigate("/");
+    } catch (e) {
+      setError(String(e));
+      setDeleting(false);
+      setConfirmDelete(false);
+    }
+  }
+
   if (loading) return <div className="text-muted py-12 text-center">Loading…</div>;
   if (error) return <div className="text-red-400 py-12 text-center">{error}</div>;
   if (!card) return null;
@@ -68,7 +83,34 @@ export default function CardDetail() {
         <div className="flex items-start gap-4">
           <CardArt card={card} />
           <div className="flex-1 min-w-0">
-            <h1 className="text-xl font-semibold">{card.card_name}</h1>
+            <div className="flex items-start justify-between gap-2">
+              <h1 className="text-xl font-semibold">{card.card_name}</h1>
+              {!confirmDelete ? (
+                <button
+                  onClick={() => setConfirmDelete(true)}
+                  className="text-[10px] text-muted hover:text-red-400 border border-transparent hover:border-red-400/30 rounded px-2 py-1 transition-colors whitespace-nowrap"
+                >
+                  Delete card
+                </button>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-red-400">Delete?</span>
+                  <button
+                    onClick={handleDelete}
+                    disabled={deleting}
+                    className="text-[10px] bg-red-500/20 text-red-400 border border-red-400/40 rounded px-2 py-1 hover:bg-red-500/30 transition-colors disabled:opacity-50"
+                  >
+                    {deleting ? "Deleting…" : "Yes, delete"}
+                  </button>
+                  <button
+                    onClick={() => setConfirmDelete(false)}
+                    className="text-[10px] text-muted hover:text-[#e6edf3] border border-border rounded px-2 py-1 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
+            </div>
             <div className="text-muted text-sm mt-1">
               {card.set_name} · #{card.card_number} · {card.game}
             </div>
@@ -261,26 +303,29 @@ function StatPill({ label, value, color }: { label: string; value: number; color
 // ── Cert category / purpose display ──────────────────────────────────────────
 
 const CATEGORY_LABELS: Record<CertCategory, string> = {
-  raw:   "Raw",
-  psa9:  "PSA 9",
-  psa10: "PSA 10",
-  cgc9:  "CGC 9",
-  cgc10: "CGC 10",
+  raw:     "Raw",
+  psa9:    "PSA 9",   psa10:   "PSA 10",
+  cgc9:    "CGC 9",   cgc10:   "CGC 10",
+  bgs9:    "BGS 9",   bgs9pt5: "BGS 9.5",  bgs10: "BGS 10",
 };
 
 const PURPOSE_LABELS: Record<CertPurpose, { label: string; color: string }> = {
-  analytics:        { label: "Analytics",  color: "text-muted" },
-  buy_and_grade:    { label: "Buy+Grade",  color: "text-accent" },
-  crack_and_regrade:{ label: "Crack+Regrade", color: "text-orange-400" },
+  analytics:         { label: "Analytics",          color: "text-muted"      },
+  grading_tracker:   { label: "My Grading Tracker", color: "text-accent"     },
+  buy_and_grade:     { label: "Buy+Grade",           color: "text-accent"     },
+  crack_and_regrade: { label: "Crack+Regrade",       color: "text-orange-400" },
 };
 
 function CategoryBadge({ category }: { category: CertCategory }) {
   const colorMap: Record<CertCategory, string> = {
-    raw:   "text-muted border-border",
-    psa9:  "text-yellow border-yellow/30 bg-yellow/10",
-    psa10: "text-green border-green/30 bg-green/10",
-    cgc9:  "text-blue-400 border-blue-400/30 bg-blue-400/10",
-    cgc10: "text-blue-300 border-blue-300/30 bg-blue-300/10",
+    raw:     "text-muted border-border",
+    psa9:    "text-yellow border-yellow/30 bg-yellow/10",
+    psa10:   "text-green border-green/30 bg-green/10",
+    cgc9:    "text-blue-400 border-blue-400/30 bg-blue-400/10",
+    cgc10:   "text-blue-300 border-blue-300/30 bg-blue-300/10",
+    bgs9:    "text-orange-400 border-orange-400/30 bg-orange-400/10",
+    bgs9pt5: "text-orange-300 border-orange-300/30 bg-orange-300/10",
+    bgs10:   "text-green border-green/30 bg-green/10",
   };
   return (
     <span className={`border rounded px-1.5 py-0.5 text-[10px] font-semibold whitespace-nowrap ${colorMap[category] ?? "text-muted border-border"}`}>
