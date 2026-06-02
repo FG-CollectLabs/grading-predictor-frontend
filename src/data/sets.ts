@@ -16,6 +16,9 @@ export const POKEMON_SETS: EraGroup[] = [
       { name: "Chaos Rising",           code: "me3"       },
       { name: "Perfect Order",          code: "me2"       },
       { name: "Ascended Heroes",        code: "me1"       },
+      { name: "Phantasmal Flames",      code: "me02"      },
+      { name: "Mega Evolutions",        code: "me01"      },
+      { name: "Black Star Promos",      code: "mep"       },
     ],
   },
   {
@@ -36,6 +39,7 @@ export const POKEMON_SETS: EraGroup[] = [
       { name: "Obsidian Flames",        code: "sv3"       },
       { name: "Paldea Evolved",         code: "sv2"       },
       { name: "Scarlet & Violet",       code: "sv1"       },
+      { name: "Black Star Promos",      code: "svp"       },
     ],
   },
   {
@@ -57,6 +61,7 @@ export const POKEMON_SETS: EraGroup[] = [
       { name: "Darkness Ablaze",        code: "swsh3"     },
       { name: "Rebel Clash",            code: "swsh2"     },
       { name: "Sword & Shield",         code: "swsh1"     },
+      { name: "Black Star Promos",      code: "swshp"     },
     ],
   },
   {
@@ -88,6 +93,7 @@ export const POKEMON_SETS: EraGroup[] = [
       { name: "Furious Fists",          code: "xy3"       },
       { name: "Flashfire",              code: "xy2"       },
       { name: "XY",                     code: "xy1"       },
+      { name: "Black Star Promos",      code: "xyp"       },
     ],
   },
 ];
