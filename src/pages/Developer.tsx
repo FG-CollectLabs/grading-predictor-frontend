@@ -1,3 +1,5 @@
+import AICostPanel from "../components/AICostPanel";
+
 // Developer tab: how the grading predictor is put together. Static on
 // purpose: it documents the design; live numbers are on the Factory tab.
 
@@ -143,6 +145,14 @@ export default function Developer() {
             <div className="text-xs text-[#e6edf3] font-semibold">Polite collection</div>
             <div>Only public image CDNs on an allowlist, one request at a time with a fixed interval, backoff on 429/5xx, an honest user agent. No cert-site scraping (PSA/CGC lookups are done by hand when needed).</div>
           </div>
+        </div>
+      </Section>
+
+      <Section title="Operating costs">
+        <AICostPanel />
+        <div className="text-[10px] text-muted mt-2">
+          Collected hourly by tools/ai_usage_collect.py on each agent machine (cron), from Claude Code's local session
+          logs: token counts only. The pipeline itself uses no AI today; when it does, its calls report here too.
         </div>
       </Section>
 

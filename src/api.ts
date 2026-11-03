@@ -20,6 +20,7 @@ import type {
   CenteringAction,
   IngestStatus,
   FactoryStats,
+  AIUsageSummary,
 } from "./types";
 
 const BASE = import.meta.env.VITE_API_URL ?? "http://localhost:8084";
@@ -147,6 +148,7 @@ export const api = {
 
   getIngestStatus: () => get<IngestStatus>("/v1/ingest/status"),
   getFactory: () => get<FactoryStats>("/v1/factory"),
+  getAIUsage: (days = 45) => get<AIUsageSummary>(`/v1/ai-usage?days=${days}`),
   listCopies: (params: URLSearchParams) => get<CopyList>(`/v1/copies?${params.toString()}`),
   getCopy: (id: number) => get<CopyDetail>(`/v1/copies/${id}`),
   reviewCopy: (id: number, req: ReviewRequest) => post<CopyDetail>(`/v1/copies/${id}/review`, req),
