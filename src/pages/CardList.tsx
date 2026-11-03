@@ -96,12 +96,6 @@ export default function CardList() {
       <div>
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-sm text-muted uppercase tracking-widest">Select a Game</h2>
-          <Link
-            to="/certs/new"
-            className="bg-accent/10 border border-accent/30 text-accent rounded px-3 py-1.5 text-xs hover:bg-accent/20 transition-colors"
-          >
-            + New Cert
-          </Link>
         </div>
 
         {games.length === 0 ? (
@@ -152,12 +146,6 @@ export default function CardList() {
           </button>
           <span className="text-border">/</span>
           <span className={`text-sm font-semibold ${meta.accent}`}>{meta.label}</span>
-          <Link
-            to="/certs/new"
-            className="ml-auto bg-accent/10 border border-accent/30 text-accent rounded px-3 py-1.5 text-xs hover:bg-accent/20 transition-colors"
-          >
-            + New Cert
-          </Link>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
@@ -228,12 +216,6 @@ export default function CardList() {
             onChange={(e) => setSearch(e.target.value)}
             className="bg-surface border border-border rounded px-3 py-1.5 text-sm text-[#e6edf3] placeholder-muted outline-none focus:border-accent w-48"
           />
-          <Link
-            to="/certs/new"
-            className="bg-accent/10 border border-accent/30 text-accent rounded px-3 py-1.5 text-xs hover:bg-accent/20 transition-colors whitespace-nowrap"
-          >
-            + New Cert
-          </Link>
         </div>
       </div>
 
