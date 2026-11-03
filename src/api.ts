@@ -16,6 +16,8 @@ import type {
   CopyList,
   CopyDetail,
   ReviewRequest,
+  CenteringMeasurement,
+  CenteringAction,
 } from "./types";
 
 const BASE = import.meta.env.VITE_API_URL ?? "http://localhost:8084";
@@ -144,6 +146,9 @@ export const api = {
   listCopies: (params: URLSearchParams) => get<CopyList>(`/v1/copies?${params.toString()}`),
   getCopy: (id: number) => get<CopyDetail>(`/v1/copies/${id}`),
   reviewCopy: (id: number, req: ReviewRequest) => post<CopyDetail>(`/v1/copies/${id}/review`, req),
+  getCentering: (id: number) => get<{ measurements: CenteringMeasurement[] }>(`/v1/copies/${id}/centering`),
+  postCentering: (id: number, req: CenteringAction) =>
+    post<{ id: number; measurements: CenteringMeasurement[] }>(`/v1/copies/${id}/centering`, req),
 
   // Market tracker (read-only, no auth needed)
   getGradedMarket: (displayKey: string) =>

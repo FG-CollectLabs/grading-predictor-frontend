@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { api, imageUrl } from "../api";
-import type { CopyDetail, CopyPhoto, ReviewVerdict } from "../types";
+import type { CenteringMeasurement, CopyDetail, CopyPhoto, ReviewVerdict } from "../types";
+import CenteringEditor from "../components/CenteringEditor";
 import { FLAG_LABELS, StatusBadge, gradeText } from "./Copies";
 
 // Review one feed copy's photo triage: every listing photo with the worker's
@@ -40,6 +41,11 @@ export default function CopyReview() {
   const [saved, setSaved] = useState<string | null>(null);
 
   const [uploading, setUploading] = useState<"front" | "back" | null>(null);
+  const [centering, setCentering] = useState<CenteringMeasurement[]>([]);
+
+  useEffect(() => {
+    api.getCentering(copyId).then((r) => setCentering(r.measurements)).catch(() => setCentering([]));
+  }, [copyId]);
 
   // Your own photo (e.g. saved from the grader's cert page) replaces the
   // listing photo for that side; the worker never overwrites an upload.
@@ -305,6 +311,24 @@ export default function CopyReview() {
               {t.detail?.error && <div className="text-red-400">{t.detail.error}</div>}
             </div>
           )}
+        </div>
+      </div>
+
+      <div className="mt-6">
+        <div className="text-muted text-[10px] uppercase tracking-widest mb-2">
+          Stage 2 · centering (engine output, editable: corrections are saved alongside the engine's result)
+        </div>
+        <div className="space-y-3">
+          {(["front", "back"] as const).map((side) => (
+            <CenteringEditor
+              key={`${side}-${side === "front" ? copy.front_image : copy.back_image}`}
+              copyId={copy.id}
+              side={side}
+              imagePath={side === "front" ? copy.front_image : copy.back_image}
+              measurements={centering.filter((m) => m.side === side)}
+              onSaved={setCentering}
+            />
+          ))}
         </div>
       </div>
     </div>
