@@ -4,6 +4,8 @@ import CardDetail from "./pages/CardDetail";
 import NewCert from "./pages/NewCert";
 import CertView from "./pages/CertView";
 import Intake from "./pages/Intake";
+import Copies from "./pages/Copies";
+import CopyReview from "./pages/CopyReview";
 
 export default function App() {
   return (
@@ -15,6 +17,12 @@ export default function App() {
           </Link>
           <span className="text-muted text-xs">defect → grade dataset</span>
           <div className="ml-auto flex gap-4 text-xs text-muted">
+            <Link to="/copies" className="hover:text-accent transition-colors">
+              Copies
+            </Link>
+            <Link to="/copies?review=needed" className="hover:text-accent transition-colors">
+              Review queue
+            </Link>
             <Link to="/intake" className="hover:text-accent transition-colors">
               + Copy intake
             </Link>
@@ -39,6 +47,8 @@ export default function App() {
             <Route path="/certs/new" element={<NewCert />} />
             <Route path="/intake" element={<Intake />} />
             <Route path="/certs/:id" element={<CertView />} />
+            <Route path="/copies" element={<Copies />} />
+            <Route path="/copies/:id" element={<CopyReview />} />
           </Routes>
         </main>
       </div>
