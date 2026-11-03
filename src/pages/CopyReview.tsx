@@ -39,6 +39,29 @@ export default function CopyReview() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState<string | null>(null);
 
+  const [uploading, setUploading] = useState<"front" | "back" | null>(null);
+
+  // Your own photo (e.g. saved from the grader's cert page) replaces the
+  // listing photo for that side; the worker never overwrites an upload.
+  const upload = useCallback(
+    async (side: "front" | "back", file: File) => {
+      setUploading(side);
+      setError(null);
+      try {
+        await api.uploadCertImage(copyId, side, file);
+        const c = await api.getCopy(copyId);
+        setCopy(c);
+        setTags((tg) => (tg.includes("better_photo_available") ? tg : [...tg, "better_photo_available"]));
+        setSaved(`Uploaded your ${side} photo. Save to record the review.`);
+      } catch (e) {
+        setError(String(e));
+      } finally {
+        setUploading(null);
+      }
+    },
+    [copyId],
+  );
+
   const load = useCallback(() => {
     setError(null);
     setSaved(null);
@@ -173,8 +196,8 @@ export default function CopyReview() {
       <div className="grid lg:grid-cols-[1fr_320px] gap-4">
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
-            <Chosen side="front" path={copy.front_image} pick={front} auto={t?.auto_front_pos ?? t?.front_pos ?? null} changed={frontChanged} />
-            <Chosen side="back" path={copy.back_image} pick={back} auto={t?.auto_back_pos ?? t?.back_pos ?? null} changed={backChanged} />
+            <Chosen side="front" path={copy.front_image} pick={front} auto={t?.auto_front_pos ?? t?.front_pos ?? null} changed={frontChanged} onUpload={(f) => upload("front", f)} uploading={uploading === "front"} />
+            <Chosen side="back" path={copy.back_image} pick={back} auto={t?.auto_back_pos ?? t?.back_pos ?? null} changed={backChanged} onUpload={(f) => upload("back", f)} uploading={uploading === "back"} />
           </div>
 
           {copy.photos.length > 0 && (
@@ -209,9 +232,9 @@ export default function CopyReview() {
               placeholder="digits only"
               className={`w-full bg-bg border rounded px-2 py-1.5 text-sm font-mono outline-none focus:border-accent ${certChanged ? "border-yellow" : "border-border"}`}
             />
-            {copy.cert_number && copy.grader === "PSA" && (
-              <a href={`https://www.psacard.com/cert/${copy.cert_number}`} target="_blank" rel="noreferrer" className="text-[10px] text-accent hover:underline">
-                check on psacard.com ↗
+            {certLookupUrl(copy.grader, cert.trim()) && (
+              <a href={certLookupUrl(copy.grader, cert.trim())!} target="_blank" rel="noreferrer" className="text-[10px] text-accent hover:underline">
+                open {copy.grader} cert page ↗ (grader's own photos)
               </a>
             )}
           </div>
@@ -288,9 +311,49 @@ export default function CopyReview() {
   );
 }
 
-function Chosen({ side, path, pick, auto, changed }: { side: string; path: string | null; pick: number | null; auto: number | null; changed: boolean }) {
+/** The grader's public cert page, which shows their own photos of the slab. */
+export function certLookupUrl(grader: string, cert: string): string | null {
+  if (!/^\d{6,15}$/.test(cert)) return null;
+  switch (grader.toUpperCase()) {
+    case "PSA":
+      return `https://www.psacard.com/cert/${cert}/psa`;
+    case "CGC":
+      return `https://www.cgccards.com/certlookup/${cert}/`;
+    default:
+      return null;
+  }
+}
+
+function Chosen({ side, path, pick, auto, changed, onUpload, uploading }: {
+  side: string; path: string | null; pick: number | null; auto: number | null; changed: boolean;
+  onUpload: (f: File) => void; uploading: boolean;
+}) {
+  const [over, setOver] = useState(false);
+  // Paste works while the pointer is over this panel.
+  useEffect(() => {
+    if (!over) return;
+    function onPaste(e: ClipboardEvent) {
+      const f = Array.from(e.clipboardData?.files ?? []).find((x) => x.type.startsWith("image/"));
+      if (f) {
+        e.preventDefault();
+        onUpload(f);
+      }
+    }
+    window.addEventListener("paste", onPaste);
+    return () => window.removeEventListener("paste", onPaste);
+  }, [over, onUpload]);
   return (
-    <div className="bg-surface border border-border rounded-md p-2">
+    <div
+      className={`bg-surface border rounded-md p-2 ${over ? "border-accent/60" : "border-border"}`}
+      onMouseEnter={() => setOver(true)}
+      onMouseLeave={() => setOver(false)}
+      onDragOver={(e) => e.preventDefault()}
+      onDrop={(e) => {
+        e.preventDefault();
+        const f = Array.from(e.dataTransfer.files).find((x) => x.type.startsWith("image/"));
+        if (f) onUpload(f);
+      }}
+    >
       <div className="flex justify-between text-[10px] text-muted mb-1">
         <span className="uppercase tracking-widest">{side}</span>
         <span>
@@ -310,6 +373,19 @@ function Chosen({ side, path, pick, auto, changed }: { side: string; path: strin
           no {side} stored
         </div>
       )}
+      <label className="block text-center text-[10px] text-muted mt-1 cursor-pointer hover:text-accent">
+        {uploading ? "uploading…" : `drop, paste or choose your own ${side} photo`}
+        <input
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) onUpload(f);
+            e.target.value = "";
+          }}
+        />
+      </label>
     </div>
   );
 }
