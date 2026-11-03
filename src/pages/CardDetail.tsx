@@ -211,10 +211,10 @@ export default function CardDetail() {
           </button>
         ))}
         <Link
-          to={`/certs/new?card_id=${cardId}`}
+          to={`/intake?card_id=${cardId}`}
           className="ml-auto text-xs text-accent border border-accent/30 rounded px-3 py-1 hover:bg-accent/10 transition-colors self-center mb-1"
         >
-          + Add Cert
+          + Add copy (with photos)
         </Link>
       </div>
 

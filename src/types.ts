@@ -352,3 +352,45 @@ export interface CenteringAction {
   tags: string[];
   note: string;
 }
+
+// ── Factory / ingest status ──────────────────────────────────────────────────
+
+export interface IngestStatus {
+  enabled: boolean;
+  feed_configured?: boolean;
+  triage?: Record<string, number>;
+  triage_paused?: string;
+  triage_last_run?: string;
+  centering?: Record<string, number>;
+  centering_paused?: string;
+  centering_last_run?: string;
+  cards_synced?: number;
+  catalog_synced_at?: string;
+  feed_last_run?: string;
+  feed_copies?: number;
+  photos?: Record<string, number>;
+  photo_bytes?: number;
+  photo_budget_bytes?: number;
+  free_bytes?: number;
+}
+
+export interface VersionFeedback {
+  version: string;
+  auto: number;
+  accepted_as_is: number;
+  adjusted: number;
+  rejected: number;
+  tags: Record<string, number>;
+  side_err_mm: Record<"left" | "right" | "top" | "bottom", number | null>;
+  outer_err_px: number | null;
+  lr_err_pp: number | null;
+  tb_err_pp: number | null;
+  within_1pp: number | null;
+}
+
+export interface FactoryStats {
+  listings: { copies: number; feed_copies: number; with_cert: number; cert_sources: Record<string, number>; by_source: Record<string, number> };
+  triage: { status: Record<string, number>; needs_review: number; reviewed: Record<string, number>; both_photos: number };
+  centering: { status: Record<string, number>; current: Record<string, number>; unseeded: number; versions: string[] | null };
+  feedback: VersionFeedback[];
+}

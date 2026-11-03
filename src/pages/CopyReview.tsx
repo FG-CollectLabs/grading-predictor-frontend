@@ -316,7 +316,7 @@ export default function CopyReview() {
 
       <div className="mt-6">
         <div className="text-muted text-[10px] uppercase tracking-widest mb-2">
-          Stage 2 · centering (engine output, editable: corrections are saved alongside the engine's result)
+          Stage 3 · centering (engine output, editable: corrections are saved alongside the engine's result)
         </div>
         <div className="space-y-3">
           {(["front", "back"] as const).map((side) => (
