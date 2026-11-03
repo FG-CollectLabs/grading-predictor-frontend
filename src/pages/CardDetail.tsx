@@ -369,7 +369,7 @@ const CATEGORY_LABELS: Record<CertCategory, string> = {
   raw:     "Raw",
   psa9:    "PSA 9",   psa10:   "PSA 10",
   cgc9:    "CGC 9",   cgc10:   "CGC 10",
-  bgs9:    "BGS 9",   bgs9pt5: "BGS 9.5",  bgs10: "BGS 10",
+  bgs9:    "BGS 9",   bgs9pt5: "BGS 9.5",  bgs10: "BGS 10", graded: "Graded",
 };
 
 const PURPOSE_LABELS: Record<CertPurpose, { label: string; color: string }> = {
@@ -377,6 +377,7 @@ const PURPOSE_LABELS: Record<CertPurpose, { label: string; color: string }> = {
   grading_tracker:   { label: "My Grading Tracker", color: "text-accent"     },
   buy_and_grade:     { label: "Buy+Grade",           color: "text-accent"     },
   crack_and_regrade: { label: "Crack+Regrade",       color: "text-orange-400" },
+  backtest:          { label: "Backtest",           color: "text-purple"     },
 };
 
 function CategoryBadge({ category }: { category: CertCategory }) {
@@ -389,6 +390,7 @@ function CategoryBadge({ category }: { category: CertCategory }) {
     bgs9:    "text-orange-400 border-orange-400/30 bg-orange-400/10",
     bgs9pt5: "text-orange-300 border-orange-300/30 bg-orange-300/10",
     bgs10:   "text-green border-green/30 bg-green/10",
+    graded:   "text-purple border-purple/30 bg-purple/10",
   };
   return (
     <span className={`border rounded px-1.5 py-0.5 text-[10px] font-semibold whitespace-nowrap ${colorMap[category] ?? "text-muted border-border"}`}>

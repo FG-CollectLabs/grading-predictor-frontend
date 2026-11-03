@@ -12,6 +12,7 @@ import type {
   CreateInspectionRequest,
   GradedMarketData,
   GemRateData,
+  CopiesSummary,
 } from "./types";
 
 const BASE = import.meta.env.VITE_API_URL ?? "http://localhost:8084";
@@ -89,6 +90,14 @@ export const api = {
   checkCertNumber: (certNumber: string) =>
     get<{ exists: boolean; cert_id?: number; card_id?: number; grader?: string; category?: string }>(`/v1/certs/check?cert_number=${encodeURIComponent(certNumber)}`),
   createCert: (req: CreateCertRequest) => post<{ id: number; cert_number: string }>("/v1/certs", req),
+  /** The card linked to a market-tracker display_key, or null when none is. */
+  getCardByMarketKey: async (key: string): Promise<CardDetail | null> => {
+    const res = await fetch(`${BASE}/v1/cards/by-market-key?key=${encodeURIComponent(key)}`);
+    if (res.status === 404) return null;
+    if (!res.ok) throw new Error(`GET by-market-key: ${res.status}`);
+    return res.json() as Promise<CardDetail>;
+  },
+  getCopies: (cardId: number) => get<CopiesSummary>(`/v1/cards/${cardId}/copies`),
   getCert: (id: number) => get<CertFullDetail>(`/v1/certs/${id}`),
   deleteCert: async (id: number) => {
     const res = await fetch(`${BASE}/v1/certs/${id}`, {

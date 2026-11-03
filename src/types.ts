@@ -36,6 +36,10 @@ export interface CertRow {
   category: CertCategory;
   purpose: CertPurpose;
   created_at: string;
+  grade: number | null;
+  grade_label: GradeLabel | null;
+  source: CopySource;
+  source_ref: string | null;
   front_image: string | null;
   back_image: string | null;
   centering_front_lr: number | null;
@@ -98,8 +102,10 @@ export interface StatRow {
 export type SurfaceGrade = "clean" | "light_scratch" | "heavy_scratch" | "print_line" | "print_dot";
 export type CornerGrade = "sharp" | "light_wear" | "heavy_wear";
 export type EdgeGrade = "clean" | "light_wear" | "heavy_wear" | "nick";
-export type CertCategory = "raw" | "psa9" | "psa10" | "cgc9" | "cgc10" | "bgs9" | "bgs9pt5" | "bgs10";
-export type CertPurpose = "analytics" | "grading_tracker" | "buy_and_grade" | "crack_and_regrade";
+export type CertCategory = "raw" | "psa9" | "psa10" | "cgc9" | "cgc10" | "bgs9" | "bgs9pt5" | "bgs10" | "graded";
+export type GradeLabel = "pristine" | "black_label";
+export type CopySource = "manual" | "owned" | "ebay" | "fanatics" | "consigner" | "other";
+export type CertPurpose = "analytics" | "grading_tracker" | "buy_and_grade" | "crack_and_regrade" | "backtest";
 
 export interface CertFullDetail {
   id: number;
@@ -112,6 +118,10 @@ export interface CertFullDetail {
   category: CertCategory;
   purpose: CertPurpose;
   created_at: string;
+  grade: number | null;
+  grade_label: GradeLabel | null;
+  source: CopySource;
+  source_ref: string | null;
   front_image: string | null;
   back_image: string | null;
 }
@@ -128,11 +138,30 @@ export interface CreateCardRequest {
 
 export interface CreateCertRequest {
   card_id: number;
-  cert_number: string;
+  cert_number?: string;
   grader?: string;
   notes?: string;
   category?: CertCategory;
   purpose?: CertPurpose;
+  grade?: number | null;
+  grade_label?: GradeLabel | null;
+  source?: CopySource;
+  source_ref?: string | null;
+}
+
+export interface CopyGradeCount {
+  grader: string;
+  grade: number | null;
+  grade_label: GradeLabel | null;
+  copies: number;
+  both_photos: number;
+}
+
+export interface CopiesSummary {
+  card_id: number;
+  copies: number;
+  both_photos: number;
+  by_grade: CopyGradeCount[];
 }
 
 export interface CreateInspectionRequest {
