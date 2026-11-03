@@ -254,6 +254,8 @@ export interface CopyRow {
   front_image: string | null;
   back_image: string | null;
   updated_at: string;
+  front_centering: CenteringBrief | null;
+  back_centering: CenteringBrief | null;
 }
 
 export interface CopyList {
@@ -302,6 +304,51 @@ export interface ReviewRequest {
   front_pos?: number;
   back_pos?: number;
   cert_number?: string;
+  tags: string[];
+  note: string;
+}
+
+// ── Centering (pipeline stage 2) ─────────────────────────────────────────────
+
+export type Quad = [[number, number], [number, number], [number, number], [number, number]];
+export type InnerMM = { left: number; right: number; top: number; bottom: number };
+
+export interface CenteringMeasurement {
+  id: number;
+  image_id: number;
+  side: "front" | "back";
+  image_sha256: string | null;
+  supersedes: number | null;
+  outer_quad: Quad | null;
+  px_per_mm: number | null;
+  inner_mm: InnerMM | null;
+  lr_left_pct: number | null;
+  tb_top_pct: number | null;
+  lr_err_pp: number | null;
+  tb_err_pp: number | null;
+  rotation_deg: number | null;
+  placed_by: string;
+  detector_version: string;
+  status: "proposed" | "accepted" | "superseded" | "rejected";
+  flags: string[];
+  tags: string[];
+  note: string | null;
+  created_at: string;
+}
+
+export interface CenteringBrief {
+  lr: number | null;
+  tb: number | null;
+  status: "proposed" | "accepted";
+  placed_by: string;
+  version: string;
+}
+
+export interface CenteringAction {
+  action: "accept" | "adjust" | "reject";
+  base_id: number;
+  outer_quad?: Quad;
+  inner_mm?: InnerMM;
   tags: string[];
   note: string;
 }

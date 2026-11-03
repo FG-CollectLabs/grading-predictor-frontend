@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { api, imageUrl } from "../api";
-import type { CopyList, CopyRow } from "../types";
+import type { CenteringBrief, CopyList, CopyRow } from "../types";
 
 // Browse every copy (feed + intake) with filters for photos, triage and
 // review state. Filters live in the URL so the review page can walk the same
@@ -22,6 +22,12 @@ const PHOTOS: Opt[] = [
   { value: "both", label: "Front + back" },
   { value: "any", label: "Some" },
   { value: "none", label: "None" },
+];
+const CENTERING: Opt[] = [
+  { value: "", label: "Any" },
+  { value: "proposed", label: "To check" },
+  { value: "accepted", label: "Accepted" },
+  { value: "none", label: "Not measured" },
 ];
 const TRIAGE: Opt[] = [
   { value: "", label: "Any status" },
@@ -122,6 +128,7 @@ export default function Copies() {
       <div className="bg-surface border border-border rounded-md p-4 mb-4 space-y-3">
         <ChipRow label="Review" opts={REVIEW} value={params.get("review") ?? ""} counts={countFor} onPick={(v) => set("review", v)} />
         <ChipRow label="Photos" opts={PHOTOS} value={params.get("photos") ?? ""} counts={countFor} onPick={(v) => set("photos", v)} />
+        <ChipRow label="Centering" opts={CENTERING} value={params.get("centering") ?? ""} counts={{}} onPick={(v) => set("centering", v)} />
         <div className="flex flex-wrap gap-2 items-center">
           <Select opts={TRIAGE} value={params.get("triage") ?? ""} onChange={(v) => set("triage", v)} />
           <Select opts={GRADERS} value={params.get("grader") ?? ""} onChange={(v) => set("grader", v)} />
@@ -182,7 +189,7 @@ function ChipRow({ label, opts, value, counts, onPick }: {
 }) {
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <span className="text-muted text-[10px] uppercase tracking-widest w-14">{label}</span>
+      <span className="text-muted text-[10px] uppercase tracking-widest w-20">{label}</span>
       {opts.map((o) => (
         <button
           key={o.value}
@@ -261,6 +268,12 @@ function CopyTile({ copy, query }: { copy: CopyRow; query: string }) {
           {copy.cert_number || "no cert"}
           {copy.cert_source && copy.cert_number ? ` · ${copy.cert_source}` : ""}
         </div>
+        {(copy.front_centering || copy.back_centering) && (
+          <div className="text-[10px] font-mono mt-0.5 flex gap-2">
+            <CenteringChip label="F" c={copy.front_centering} />
+            <CenteringChip label="B" c={copy.back_centering} />
+          </div>
+        )}
         {copy.flags.length > 0 && (
           <div className="flex flex-wrap gap-1 mt-1">
             {copy.flags.map((f) => (
@@ -282,4 +295,15 @@ function Thumb({ path, label }: { path: string | null; label: string }) {
     );
   }
   return <img src={imageUrl(path)} alt={label} loading="lazy" className="aspect-[5/7] w-full object-contain bg-bg rounded" />;
+}
+
+function CenteringChip({ label, c }: { label: string; c: CenteringBrief | null }) {
+  if (!c || c.lr == null || c.tb == null) return <span className="text-muted">{label} —</span>;
+  const worst = Math.max(Math.abs(c.lr - 50), Math.abs(c.tb - 50)) + 50;
+  const color = c.status === "accepted" ? "text-green" : "text-yellow";
+  return (
+    <span className={color} title={`${c.status} · ${c.placed_by === "auto" ? `auto v${c.version}` : c.placed_by}`}>
+      {label} {Math.round(worst)}/{Math.round(100 - worst)}
+    </span>
+  );
 }
