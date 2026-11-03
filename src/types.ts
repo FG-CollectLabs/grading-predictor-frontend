@@ -394,3 +394,31 @@ export interface FactoryStats {
   centering: { status: Record<string, number>; current: Record<string, number>; unseeded: number; versions: string[] | null };
   feedback: VersionFeedback[];
 }
+
+// ── AI operating cost ────────────────────────────────────────────────────────
+
+export interface AIUsageRow {
+  day: string;
+  machine: string;
+  account: string;
+  workspace: string;
+  model: string;
+  requests: number;
+  input_tokens: number;
+  output_tokens: number;
+  cache_write_5m: number;
+  cache_write_1h: number;
+  cache_read: number;
+  api_cost_usd: number;
+}
+
+export interface AIUsageSummary {
+  rows: AIUsageRow[];
+  subscription_usd_monthly: number;
+  month_to_date_api_usd: number;
+  last_30_days_api_usd: number;
+  month_start: string;
+  days_in_month: number;
+  day_of_month: number;
+  last_updated: string | null;
+}

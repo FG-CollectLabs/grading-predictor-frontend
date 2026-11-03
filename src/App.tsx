@@ -8,6 +8,7 @@ import CopyReview from "./pages/CopyReview";
 
 import Factory from "./pages/Factory";
 import Developer from "./pages/Developer";
+import AICostPanel from "./components/AICostPanel";
 
 // Tabs: Analytics (cards and their copies), Pre-grading factory (the pipeline
 // and its review queues), Grader analytics (later), Developer (architecture).
@@ -66,7 +67,7 @@ export default function App() {
         <Header />
         <main className="max-w-7xl mx-auto px-6 py-6">
           <Routes>
-            <Route path="/" element={<CardList />} />
+            <Route path="/" element={<><div className="mb-6"><AICostPanel compact /></div><CardList /></>} />
             <Route path="/cards/:id" element={<CardDetail />} />
             {/* adding a copy now starts from its card's page */}
             <Route path="/certs/new" element={<Navigate to="/" replace />} />
