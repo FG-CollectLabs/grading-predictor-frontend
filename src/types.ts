@@ -225,3 +225,83 @@ export interface GemRateData {
   display_key: string;
   gem_rates: GemRateRow[];
 }
+
+// ── Copies browser / triage review ───────────────────────────────────────────
+
+export type TriageStatus = "pending" | "working" | "done" | "needs_ai" | "failed" | "skipped";
+export type ReviewVerdict = "ok" | "fixed" | "unusable";
+
+export interface CopyRow {
+  id: number;
+  card_id: number;
+  card_name: string;
+  set_name: string;
+  card_number: string;
+  language: string | null;
+  grader: string;
+  grade: number | null;
+  grade_label: GradeLabel | null;
+  cert_number: string;
+  source: string;
+  source_ref: string | null;
+  source_title: string | null;
+  triage_status: TriageStatus | null;
+  cert_source: "feed" | "qr" | "barcode" | "ai" | "manual" | null;
+  flags: string[];
+  needs_review: boolean;
+  verdict: ReviewVerdict | null;
+  reviewed_at: string | null;
+  front_image: string | null;
+  back_image: string | null;
+  updated_at: string;
+}
+
+export interface CopyList {
+  items: CopyRow[];
+  total: number;
+  counts?: { needs_review: number; unreviewed: number; reviewed: number; both_photos: number };
+}
+
+export interface CopyPhoto {
+  position: number;
+  url: string;
+  thumb_url: string;
+  status: string;
+  label: "front" | "back" | "closeup" | "other" | null;
+  score: number | null;
+  side: "front" | "back" | null;
+}
+
+export interface CopyTriage {
+  status: TriageStatus;
+  front_pos: number | null;
+  back_pos: number | null;
+  auto_front_pos: number | null;
+  auto_back_pos: number | null;
+  forced_front_pos: number | null;
+  forced_back_pos: number | null;
+  cert_source: string | null;
+  detail: { flags?: string[]; photos?: Record<string, { label: string; score: number; front_inliers: number; back_inliers: number } | null>; codes?: { fmt: string; text: string }[]; error?: string } | null;
+  attempts: number;
+  verdict: ReviewVerdict | null;
+  review_tags: string[];
+  review_note: string | null;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  updated_at: string;
+}
+
+export interface CopyDetail extends CopyRow {
+  photos: CopyPhoto[];
+  triage: CopyTriage | null;
+  card: CardDetail;
+}
+
+export interface ReviewRequest {
+  verdict: ReviewVerdict;
+  front_pos?: number;
+  back_pos?: number;
+  cert_number?: string;
+  tags: string[];
+  note: string;
+}

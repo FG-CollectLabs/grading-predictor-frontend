@@ -13,11 +13,20 @@ import type {
   GradedMarketData,
   GemRateData,
   CopiesSummary,
+  CopyList,
+  CopyDetail,
+  ReviewRequest,
 } from "./types";
 
 const BASE = import.meta.env.VITE_API_URL ?? "http://localhost:8084";
 const TOKEN = import.meta.env.VITE_API_TOKEN ?? "";
 const MARKET_BASE = import.meta.env.VITE_MARKET_API_URL ?? "https://market.futuregadgetlabs.com";
+
+/** URL of a stored photo (a path under the API's image directory). */
+export function imageUrl(path: string): string {
+  const base = import.meta.env.VITE_GCS_PUBLIC_BASE || `${BASE}/v1/images`;
+  return `${base}/${path}`;
+}
 
 function authHeaders(): HeadersInit {
   return TOKEN ? { Authorization: `Bearer ${TOKEN}` } : {};
@@ -131,6 +140,10 @@ export const api = {
   createInspection: (certId: number, req: CreateInspectionRequest) =>
     post<InspectionRow>(`/v1/certs/${certId}/inspections`, req),
   listInspections: (certId: number) => get<InspectionRow[]>(`/v1/certs/${certId}/inspections`),
+
+  listCopies: (params: URLSearchParams) => get<CopyList>(`/v1/copies?${params.toString()}`),
+  getCopy: (id: number) => get<CopyDetail>(`/v1/copies/${id}`),
+  reviewCopy: (id: number, req: ReviewRequest) => post<CopyDetail>(`/v1/copies/${id}/review`, req),
 
   // Market tracker (read-only, no auth needed)
   getGradedMarket: (displayKey: string) =>
