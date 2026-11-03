@@ -103,7 +103,7 @@ export type SurfaceGrade = "clean" | "light_scratch" | "heavy_scratch" | "print_
 export type CornerGrade = "sharp" | "light_wear" | "heavy_wear";
 export type EdgeGrade = "clean" | "light_wear" | "heavy_wear" | "nick";
 export type CertCategory = "raw" | "psa9" | "psa10" | "cgc9" | "cgc10" | "bgs9" | "bgs9pt5" | "bgs10" | "graded";
-export type GradeLabel = "pristine" | "black_label";
+export type GradeLabel = "pristine" | "black_label" | "flawless";
 export type CopySource = "manual" | "owned" | "ebay" | "fanatics" | "consigner" | "other";
 export type CertPurpose = "analytics" | "grading_tracker" | "buy_and_grade" | "crack_and_regrade" | "backtest";
 
@@ -147,6 +147,7 @@ export interface CreateCertRequest {
   grade_label?: GradeLabel | null;
   source?: CopySource;
   source_ref?: string | null;
+  regrade_of?: number | null;
 }
 
 export interface CopyGradeCount {

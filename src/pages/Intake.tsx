@@ -8,7 +8,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { api } from "../api";
 import type { Card, CardDetail, CopiesSummary, CopySource, GradeLabel } from "../types";
 
-type Grader = "PSA" | "CGC" | "BGS" | "TAG" | "SGC" | "Raw";
+type Grader = "PSA" | "CGC" | "BGS" | "TAG" | "SGC" | "PCG" | "Raw";
 
 interface GradeOption {
   key: string;
@@ -24,6 +24,13 @@ function options(grader: Grader): GradeOption[] {
   switch (grader) {
     case "PSA": // PSA has half grades below 9 but no 9.5
       return [10, ...HALF_DOWN.filter((g) => g !== 9.5)].map(plain);
+    case "PCG": // Premier Card Grading: Flawless 10 > Pristine 10 > Gem Mint 10
+      return [
+        { key: "10f", label: "10 Flawless", grade: 10, gradeLabel: "flawless" },
+        { key: "10p", label: "10 Pristine", grade: 10, gradeLabel: "pristine" },
+        { key: "10", label: "10 Gem Mint", grade: 10, gradeLabel: null },
+        ...HALF_DOWN.map(plain),
+      ];
     case "BGS":
       return [
         { key: "10bl", label: "10 Black Label", grade: 10, gradeLabel: "black_label" },
@@ -53,7 +60,7 @@ const SOURCES: Array<{ value: CopySource; label: string }> = [
 
 function gradeText(grader: string, grade: number | null, label: GradeLabel | null): string {
   if (grade === null) return "Raw";
-  const suffix = label === "pristine" ? " Pristine" : label === "black_label" ? " Black Label" : "";
+  const suffix = label === "pristine" ? " Pristine" : label === "black_label" ? " Black Label" : label === "flawless" ? " Flawless" : "";
   return `${grader} ${grade}${suffix}`;
 }
 
@@ -136,6 +143,7 @@ function IntakeForm() {
   const [certNumber, setCertNumber] = useState("");
   const [source, setSource] = useState<CopySource>("ebay");
   const [sourceRef, setSourceRef] = useState("");
+  const [regradeOf, setRegradeOf] = useState("");
   const [notes, setNotes] = useState("");
   const [front, setFront] = useState<File | null>(null);
   const [back, setBack] = useState<File | null>(null);
@@ -210,6 +218,7 @@ function IntakeForm() {
         grade_label: isRaw ? null : chosen!.gradeLabel,
         source,
         source_ref: sourceRef.trim() || null,
+        regrade_of: regradeOf.trim() ? Number(regradeOf.trim()) : null,
         notes: notes.trim() || undefined,
         purpose: "backtest",
       });
@@ -233,6 +242,7 @@ function IntakeForm() {
       setBack(null);
       setCertNumber("");
       setSourceRef("");
+      setRegradeOf("");
       setNotes("");
       refreshSummary(target.id);
     } catch (e) {
@@ -300,7 +310,7 @@ function IntakeForm() {
 
         <Section title="Grade">
           <div className="flex flex-wrap gap-1.5 mb-3">
-            {(["PSA", "CGC", "BGS", "TAG", "SGC", "Raw"] as Grader[]).map((g) => (
+            {(["PSA", "CGC", "BGS", "TAG", "SGC", "PCG", "Raw"] as Grader[]).map((g) => (
               <Chip key={g} active={grader === g} onClick={() => pickGrader(g)}>{g}</Chip>
             ))}
           </div>
@@ -333,6 +343,10 @@ function IntakeForm() {
             </Field>
             <Field label="Listing URL / reference">
               <input value={sourceRef} onChange={(e) => setSourceRef(e.target.value)} className={inputCls} />
+            </Field>
+            <Field label="Cracked from copy # (regrade)">
+              <input value={regradeOf} inputMode="numeric" placeholder="e.g. the PCG 9.5 this came out of"
+                onChange={(e) => setRegradeOf(e.target.value.replace(/[^0-9]/g, ""))} className={inputCls} />
             </Field>
             <Field label="Notes">
               <input value={notes} onChange={(e) => setNotes(e.target.value)} className={inputCls} />
