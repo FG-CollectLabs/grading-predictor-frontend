@@ -535,3 +535,5 @@ export interface TemplateTask {
   card_id: number; card_name: string; set_name: string; card_number: string; language: string | null;
   image_url: string | null; copies: number; copy_id: number; flags: string[];
 }
+
+export interface AIJob { task: string; purpose: string; what: string; copies: number; outcomes: Record<string, number> }

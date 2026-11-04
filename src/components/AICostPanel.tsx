@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../api";
-import type { AIUsageRow, AIUsageSummary } from "../types";
+import type { AIJob, AIUsageRow, AIUsageSummary } from "../types";
 
 // AI operating cost: what our Claude usage would cost at API list prices,
 // against what we pay (the subscriptions). Data: tools/ai_usage_collect.py on
@@ -60,6 +60,7 @@ export default function AICostPanel({ compact = false }: { compact?: boolean }) 
             API-equivalent = the same tokens at Anthropic API list prices. A plan's exact token allowance isn't published, so
             "share of allowance used" can't be measured; the multiple shows how much API spend the subscriptions are covering.
           </div>
+          {!compact && <FactoryJobs rows={data.rows} />}
           {!compact && <Breakdown rows={data.rows} />}
         </>
       )}
@@ -81,6 +82,64 @@ function Tile({ value, label }: { value: string; label: string }) {
 }
 
 // ── daily chart + tables ─────────────────────────────────────────────────────
+
+/** The factory's own AI tasks: what each did in the last 30 days against
+ * what its tokens would cost on the API, to judge whether it's worth it. */
+function FactoryJobs({ rows }: { rows: AIUsageRow[] }) {
+  const [jobs, setJobs] = useState<AIJob[] | null>(null);
+  useEffect(() => { api.getAIJobs().then((r) => setJobs(r.jobs)).catch(() => setJobs([])); }, []);
+  if (!jobs) return null;
+  const cutoff = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+  const cost = (purpose: string) => {
+    let c = 0, req = 0;
+    const models = new Set<string>();
+    for (const r of rows) if (r.purpose === purpose && r.day >= cutoff) { c += r.api_cost_usd; req += r.requests; models.add(r.model); }
+    return { c, req, models: [...models] };
+  };
+  const legacy = cost("job:cert-reader");
+  return (
+    <div className="mt-4">
+      <div className="text-xs font-semibold mb-1">Factory AI tasks (last 30 days)</div>
+      <table className="w-full text-[11px] border-collapse">
+        <thead>
+          <tr className="text-muted text-left border-b border-border">
+            <th className="py-1 pr-2 font-normal">task</th><th className="pr-2 font-normal">what it does</th>
+            <th className="pr-2 font-normal text-right">copies</th><th className="pr-2 font-normal">outcomes</th>
+            <th className="pr-2 font-normal">model</th><th className="pr-2 font-normal text-right">API cost</th>
+            <th className="font-normal text-right">per copy</th>
+          </tr>
+        </thead>
+        <tbody>
+          {jobs.map((j) => {
+            const k = j.purpose ? cost(j.purpose) : { c: 0, req: 0, models: [] as string[] };
+            return (
+              <tr key={j.task} className="border-b border-[#1c2128] align-top">
+                <td className="py-1 pr-2 font-semibold">{j.task}</td>
+                <td className="pr-2 text-muted">{j.what}</td>
+                <td className="pr-2 text-right font-mono">{j.copies.toLocaleString()}</td>
+                <td className="pr-2 text-muted">{Object.entries(j.outcomes).map(([o, n]) => `${o.replace(/_/g, " ")} ${n}`).join(" · ") || "—"}</td>
+                <td className="pr-2 text-muted">{j.purpose ? k.models.join(", ") || "—" : "no AI"}</td>
+                <td className="pr-2 text-right font-mono">{j.purpose ? usd(k.c) : "$0"}</td>
+                <td className="text-right font-mono">{j.purpose && j.copies ? usd(k.c / j.copies, 3) : "—"}</td>
+              </tr>
+            );
+          })}
+          {legacy.c > 0 && (
+            <tr className="border-b border-[#1c2128] text-muted">
+              <td className="py-1 pr-2">cert-reader</td><td className="pr-2">all tasks in one run (before the split)</td>
+              <td /><td /><td className="pr-2">{legacy.models.join(", ")}</td>
+              <td className="pr-2 text-right font-mono">{usd(legacy.c)}</td><td />
+            </tr>
+          )}
+        </tbody>
+      </table>
+      <div className="text-[10px] text-muted mt-1">
+        Run with Claude Code on the agent machines (subscription), so "API cost" is what the same tokens would cost on the API.
+        Each task has its own hourly limit in cron; lower it, switch model (--model) or stop a task that isn't worth its cost.
+      </div>
+    </div>
+  );
+}
 
 /** Collapsed by default: the tiles say what we'd have paid vs. what we paid;
  * the breakdown shows what the tokens went to. */
