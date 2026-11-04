@@ -14,7 +14,6 @@ import Sets from "./pages/analytics/Sets";
 import SetCards from "./pages/analytics/SetCards";
 import CardAnalytics from "./pages/analytics/CardAnalytics";
 import Developer from "./pages/Developer";
-import AICostPanel from "./components/AICostPanel";
 
 // Tabs: Analytics (cards and their copies), Pre-grading factory (the pipeline
 // and its review queues), Grader analytics (later), Developer (architecture).
