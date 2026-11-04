@@ -21,6 +21,10 @@ import type {
   IngestStatus,
   FactoryStats,
   AIUsageSummary,
+  ReviewSteps,
+  ReviewEvent,
+  StepId,
+  StepDecision,
 } from "./types";
 
 const BASE = import.meta.env.VITE_API_URL ?? "http://localhost:8084";
@@ -152,6 +156,10 @@ export const api = {
   listCopies: (params: URLSearchParams) => get<CopyList>(`/v1/copies?${params.toString()}`),
   getCopy: (id: number) => get<CopyDetail>(`/v1/copies/${id}`),
   reviewCopy: (id: number, req: ReviewRequest) => post<CopyDetail>(`/v1/copies/${id}/review`, req),
+  getSteps: (id: number) => get<ReviewSteps>(`/v1/copies/${id}/steps`),
+  postStep: (id: number, req: { step: StepId; decision: StepDecision; note?: string; tags?: string[]; payload?: Record<string, unknown> }) =>
+    post<ReviewSteps>(`/v1/copies/${id}/steps`, req),
+  getReviewHistory: (limit = 100, offset = 0) => get<{ events: ReviewEvent[] }>(`/v1/review-history?limit=${limit}&offset=${offset}`),
   getCentering: (id: number) => get<{ measurements: CenteringMeasurement[] }>(`/v1/copies/${id}/centering`),
   postCentering: (id: number, req: CenteringAction) =>
     post<{ id: number; measurements: CenteringMeasurement[] }>(`/v1/copies/${id}/centering`, req),

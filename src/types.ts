@@ -425,3 +425,39 @@ export interface AIUsageSummary {
   day_of_month: number;
   last_updated: string | null;
 }
+
+// ── Step-by-step review ──────────────────────────────────────────────────────
+
+export type StepId = "card" | "listing" | "cert" | "photos" | "front_outer" | "front_inner" | "back_outer" | "back_inner" | "corners" | "edges" | "complete";
+export type StepDecision = "approved" | "fixed" | "rejected" | "skipped";
+
+export interface ReviewStepState {
+  step: StepId;
+  decision: StepDecision;
+  note: string | null;
+  tags: string[];
+  decided_by: string;
+  decided_at: string;
+}
+
+export interface ReviewEvent {
+  id: number;
+  cert_id: number;
+  step: StepId;
+  decision: StepDecision;
+  note: string | null;
+  tags: string[];
+  payload: Record<string, unknown> | null;
+  decided_by: string;
+  created_at: string;
+  card_name?: string;
+  grader?: string;
+  grade?: number | null;
+  front_image?: string | null;
+}
+
+export interface ReviewSteps {
+  order: StepId[];
+  steps: ReviewStepState[];
+  events: ReviewEvent[];
+}
