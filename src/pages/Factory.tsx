@@ -88,8 +88,10 @@ export default function Factory() {
             ["accepted as-is", n(cen.accepted)],
             ["adjusted by you", n(cen.adjusted)],
             ["no reference yet", n(stats.centering.unseeded)],
+            ["back templates", backTemplates(stats.centering.back_templates)],
+            ["front templates", `${n(stats.centering.front_templates)} cards`],
           ]}
-          how="Finds the card's cut edge (seeded by matching the catalog image), straightens the card, finds the inner border on each side, computes left/right and top/bottom."
+          how="Finds the card's cut edge, straightens the card, then measures the inner border. With a template (v0.4) the printed design is aligned to a reference and the template's border lines are mapped in; templates come from measurements you accept or adjust: one back per language covers every back, one front per card covers every copy of that card."
           links={[["check centering", "/copies?centering=proposed"]]}
         />
         <Stage
@@ -104,6 +106,11 @@ export default function Factory() {
       <Feedback stats={stats} />
     </div>
   );
+}
+
+function backTemplates(have?: string[]) {
+  const h = new Set(have ?? []);
+  return ["en", "ja"].map((l) => `${l} ${h.has(l) ? "✓" : "—"}`).join("  ");
 }
 
 function Stage({ step, title, subtitle, rows, how, links, health, todo }: {
