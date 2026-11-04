@@ -402,6 +402,7 @@ export interface FactoryStats {
     back_templates?: string[]; front_templates?: number;
   };
   feedback: VersionFeedback[];
+  references?: { missing: number; missing_copies: number; to_confirm: number };
 }
 
 // ── AI operating cost ────────────────────────────────────────────────────────
@@ -481,4 +482,20 @@ export interface StationStats {
   added_per_day: number;
   processed_per_day: number;
   reviewed_per_day: number;
+}
+
+// ── Reference (stock) images ─────────────────────────────────────────────────
+
+export interface RefQueueItem {
+  card_id: number;
+  card_name: string;
+  set_name: string;
+  set_code: string;
+  card_number: string;
+  language: string | null;
+  image_url: string | null;
+  image_source: string | null;
+  copies: number;
+  needs_you: number;
+  sample_front: string | null;
 }

@@ -8,6 +8,7 @@ import CopyReview from "./pages/CopyReview";
 
 import Factory from "./pages/Factory";
 import ReviewHistory from "./pages/ReviewHistory";
+import References from "./pages/References";
 import Developer from "./pages/Developer";
 import AICostPanel from "./components/AICostPanel";
 
@@ -76,6 +77,7 @@ export default function App() {
             <Route path="/certs/:id" element={<CertView />} />
             <Route path="/factory" element={<Factory />} />
             <Route path="/factory/history" element={<ReviewHistory />} />
+            <Route path="/factory/references" element={<References />} />
             <Route path="/copies" element={<Copies />} />
             <Route path="/copies/:id" element={<CopyReview />} />
             <Route path="/developer" element={<Developer />} />
