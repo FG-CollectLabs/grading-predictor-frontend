@@ -55,7 +55,8 @@ export default function CopyReview() {
   const [uploading, setUploading] = useState<"front" | "back" | null>(null);
   // cert step state
   const [cert, setCert] = useState("");
-  const [dupOf, setDupOf] = useState<number | null>(null);
+  // the copy that already has the cert being saved, loaded to compare
+  const [dupOf, setDupOf] = useState<CopyDetail | null>(null);
   const [note, setNote] = useState("");
 
   const loadCopy = useCallback(async () => {
@@ -338,23 +339,41 @@ export default function CopyReview() {
               right={<Figure label="back" src={backView.src} tall onUpload={(f) => upload("back", f)} uploading={uploading === "back"} />}
               extra={
                 <div className="max-w-xl space-y-2">
-                  {dupOf && (
-                    <div className="text-xs border border-yellow/40 bg-yellow/5 rounded p-2 space-y-2">
-                      <div>
-                        Cert {cert.trim()} is already recorded on{" "}
-                        <Link to={`/copies/${dupOf}`} className="text-accent hover:underline">copy #{dupOf}</Link>: the same slab listed twice
-                        (often once on eBay and once on Fanatics). Keep one: mark this listing a duplicate so the slab isn't counted twice.
+                  {dupOf && (() => {
+                    // Only the same card at the same grade can be the same slab listed twice;
+                    // anything else means one of the two numbers is wrong (usually a typo here).
+                    const same = dupOf.card_id === copy.card_id && dupOf.grader === copy.grader && dupOf.grade === copy.grade
+                      && (dupOf.grade_label ?? null) === (copy.grade_label ?? null);
+                    const other = (
+                      <Link to={`/copies/${dupOf.id}`} className="text-accent hover:underline">
+                        copy #{dupOf.id} ({dupOf.card_name} · {dupOf.set_name} #{dupOf.card_number} · {gradeText(dupOf)})
+                      </Link>
+                    );
+                    return same ? (
+                      <div className="text-xs border border-yellow/40 bg-yellow/5 rounded p-2 space-y-2">
+                        <div>
+                          Cert {cert.trim()} is already on {other}: the same card and grade, so most likely the same slab listed twice
+                          (often once on eBay and once on Fanatics). Keep one: mark this listing a duplicate so the slab isn't counted twice.
+                        </div>
+                        <Actions busy={busy} actions={[
+                          { label: "Mark this listing a duplicate", danger: true, onClick: () =>
+                            record("cert", "rejected", { tags: ["duplicate_listing"], note: `same slab as copy #${dupOf.id}`, payload: { duplicate_of: dupOf.id, cert: cert.trim() } }) },
+                        ]} />
                       </div>
-                      <Actions busy={busy} actions={[
-                        { label: "Mark this listing a duplicate", danger: true, onClick: () =>
-                          record("cert", "rejected", { tags: ["duplicate_listing"], note: `same slab as copy #${dupOf}`, payload: { duplicate_of: dupOf, cert: cert.trim() } }) },
-                      ]} />
-                    </div>
-                  )}
+                    ) : (
+                      <div className="text-xs border border-red-400/40 bg-red-500/5 rounded p-2 space-y-1">
+                        <div>
+                          Cert {cert.trim()} belongs to a different slab: {other}. It can't be this copy's cert, so it wasn't saved.
+                          Check the digits against the label{copy.cert_number ? ` (the stored number is ${copy.cert_number})` : ""}.
+                          If you're sure this number is right, the other copy's cert is the wrong one: open it and fix it there first.
+                        </div>
+                      </div>
+                    );
+                  })()}
                   <label className="text-muted text-xs block mb-1">
                     Cert # {copy.cert_source && copy.cert_number && <span className="opacity-70">(from {copy.cert_source})</span>}
                   </label>
-                  <input value={cert} onChange={(e) => setCert(e.target.value.replace(/\D/g, ""))} placeholder="digits only"
+                  <input value={cert} onChange={(e) => { setCert(e.target.value.replace(/\D/g, "")); setDupOf(null); }} placeholder="digits only"
                     className={`w-full bg-bg border rounded px-2 py-1.5 text-sm font-mono outline-none focus:border-accent ${certChanged ? "border-yellow" : "border-border"}`} />
                   {certLookupUrl(copy.grader, cert.trim()) && (
                     <a href={certLookupUrl(copy.grader, cert.trim())!} target="_blank" rel="noreferrer" className="text-[10px] text-accent hover:underline">
@@ -371,7 +390,10 @@ export default function CopyReview() {
                         if (t) await api.reviewCopy(copy.id, { verdict: "fixed", cert_number: cert.trim(), tags: ["cert_wrong"], note: "" });
                       } catch (e) {
                         const m = /copy (\d+)/.exec(String(e));
-                        if (m) { setDupOf(Number(m[1])); return; }   // same slab already recorded
+                        if (m) {   // another copy already has this cert: load it to compare
+                          setDupOf(await api.getCopy(Number(m[1])));
+                          return;
+                        }
                         throw e;
                       }
                       await loadCopy();
