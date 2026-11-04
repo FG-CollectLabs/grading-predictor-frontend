@@ -391,7 +391,10 @@ export interface VersionFeedback {
 export interface FactoryStats {
   listings: { copies: number; feed_copies: number; with_cert: number; cert_sources: Record<string, number>; by_source: Record<string, number> };
   triage: { status: Record<string, number>; needs_review: number; reviewed: Record<string, number>; both_photos: number };
-  centering: { status: Record<string, number>; current: Record<string, number>; unseeded: number; versions: string[] | null };
+  centering: {
+    status: Record<string, number>; current: Record<string, number>; unseeded: number; versions: string[] | null;
+    back_templates?: string[]; front_templates?: number;
+  };
   feedback: VersionFeedback[];
 }
 
