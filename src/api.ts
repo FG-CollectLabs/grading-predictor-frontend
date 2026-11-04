@@ -23,6 +23,10 @@ import type {
   AIUsageSummary,
   StationStats,
   RefQueueItem,
+  SetSummary,
+  SetCard,
+  CardAnalytics,
+  Prediction,
   ReviewSteps,
   ReviewEvent,
   StepId,
@@ -154,6 +158,24 @@ export const api = {
 
   getIngestStatus: () => get<IngestStatus>("/v1/ingest/status"),
   getFactory: () => get<FactoryStats>("/v1/factory"),
+  getSets: (language: string) =>
+    get<{ sets: SetSummary[]; languages: Record<string, number>; eras: string[]; as_of: string }>(`/v1/analytics/sets?game=pokemon${language ? `&language=${language}` : ""}`),
+  getSetCards: (code: string, language: string) =>
+    get<{ cards: SetCard[] }>(`/v1/analytics/sets/${encodeURIComponent(code)}/cards?language=${language}`),
+  getCardAnalytics: (id: number) => get<CardAnalytics>(`/v1/analytics/cards/${id}`),
+  getPrediction: (copyId: number) => get<Prediction>(`/v1/predict/${copyId}`),
+  predict: async (cardId: number, front: File, back: File) => {
+    const form = new FormData();
+    form.append("card_id", String(cardId));
+    form.append("front", front);
+    form.append("back", back);
+    const res = await fetch(`${BASE}/v1/predict`, { method: "POST", headers: authHeaders(), body: form });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error((err as { message?: string }).message ?? `predict: ${res.status}`);
+    }
+    return res.json() as Promise<{ copy_id: number; status: string }>;
+  },
   getReferenceQueue: (state: "missing" | "to_confirm", offset = 0) =>
     get<{ items: RefQueueItem[]; total: number }>(`/v1/reference-queue?state=${state}&limit=50&offset=${offset}`),
   setReference: (cardId: number, body: { confirm?: boolean; reject?: boolean }) =>

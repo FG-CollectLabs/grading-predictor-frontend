@@ -1,4 +1,4 @@
-import { HashRouter, Routes, Route, Link, Navigate, useLocation } from "react-router-dom";
+import { HashRouter, Routes, Route, Link, Navigate, useLocation, useParams } from "react-router-dom";
 import CardList from "./pages/CardList";
 import CardDetail from "./pages/CardDetail";
 import CertView from "./pages/CertView";
@@ -9,13 +9,17 @@ import CopyReview from "./pages/CopyReview";
 import Factory from "./pages/Factory";
 import ReviewHistory from "./pages/ReviewHistory";
 import References from "./pages/References";
+import Games from "./pages/analytics/Games";
+import Sets from "./pages/analytics/Sets";
+import SetCards from "./pages/analytics/SetCards";
+import CardAnalytics from "./pages/analytics/CardAnalytics";
 import Developer from "./pages/Developer";
 import AICostPanel from "./components/AICostPanel";
 
 // Tabs: Analytics (cards and their copies), Pre-grading factory (the pipeline
 // and its review queues), Grader analytics (later), Developer (architecture).
 const TABS: { label: string; to: string; match: (p: string) => boolean; soon?: boolean }[] = [
-  { label: "Analytics", to: "/", match: (p) => p === "/" || p.startsWith("/cards") || p.startsWith("/certs") || p.startsWith("/intake") },
+  { label: "Analytics", to: "/", match: (p) => p === "/" || p.startsWith("/games") || p.startsWith("/sets") || p.startsWith("/cards") || p.startsWith("/certs") || p.startsWith("/intake") },
   { label: "Pre-grading factory", to: "/factory", match: (p) => p.startsWith("/factory") || p.startsWith("/copies") },
   { label: "Grader analytics", to: "/", match: () => false, soon: true },
   { label: "Developer", to: "/developer", match: (p) => p.startsWith("/developer") },
@@ -62,6 +66,11 @@ function Header() {
   );
 }
 
+function CertRedirect() {
+  const { id } = useParams<{ id: string }>();
+  return <Navigate to={`/copies/${id}`} replace />;
+}
+
 export default function App() {
   return (
     <HashRouter>
@@ -69,12 +78,18 @@ export default function App() {
         <Header />
         <main className="px-6 py-6">
           <Routes>
-            <Route path="/" element={<><div className="mb-6"><AICostPanel compact /></div><CardList /></>} />
-            <Route path="/cards/:id" element={<CardDetail />} />
+            <Route path="/" element={<Games />} />
+            <Route path="/games/pokemon" element={<Sets />} />
+            <Route path="/sets/:code" element={<SetCards />} />
+            <Route path="/cards/:id" element={<CardAnalytics />} />
+            <Route path="/cards/:id/legacy" element={<CardDetail />} />
+            <Route path="/cards" element={<CardList />} />
             {/* adding a copy now starts from its card's page */}
             <Route path="/certs/new" element={<Navigate to="/" replace />} />
             <Route path="/intake" element={<Intake />} />
-            <Route path="/certs/:id" element={<CertView />} />
+            {/* a copy's page is the factory review (validate / adjust each step) */}
+            <Route path="/certs/:id" element={<CertRedirect />} />
+            <Route path="/certs/:id/legacy" element={<CertView />} />
             <Route path="/factory" element={<Factory />} />
             <Route path="/factory/history" element={<ReviewHistory />} />
             <Route path="/factory/references" element={<References />} />
