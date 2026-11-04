@@ -1,104 +1,75 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api";
-import type { FactoryStats, IngestStatus } from "../types";
+import type { FactoryStats, IngestStatus, StationId, StationStats } from "../types";
 
 // The pre-grading factory: how a graded copy moves from a marketplace listing
 // to a centering measurement, with live counts per stage, links into each
 // stage's review queue, and the feedback the engine gets tuned against.
 
 const n = (v: number | undefined | null) => (v ?? 0).toLocaleString();
-const pct = (a: number, b: number) => (b > 0 ? `${Math.round((100 * a) / b)}%` : "—");
 
 export default function Factory() {
   const [stats, setStats] = useState<FactoryStats | null>(null);
   const [status, setStatus] = useState<IngestStatus | null>(null);
+  const [stations, setStations] = useState<StationStats[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const load = () =>
-      Promise.all([api.getFactory(), api.getIngestStatus()])
-        .then(([f, s]) => { setStats(f); setStatus(s); setError(null); })
+      Promise.all([api.getFactory(), api.getIngestStatus(), api.getStations()])
+        .then(([f, s, st]) => { setStats(f); setStatus(s); setStations(st.stations); setError(null); })
         .catch((e: unknown) => setError(String(e)));
     load();
-    const t = setInterval(load, 30000);
+    const t = setInterval(load, 60000);
     return () => clearInterval(t);
   }, []);
 
   if (error) return <div className="text-red-400 py-12 text-center">{error}</div>;
-  if (!stats || !status) return <div className="text-muted py-12 text-center">Loading…</div>;
+  if (!stats || !status || !stations) return <div className="text-muted py-12 text-center">Loading the factory floor…</div>;
 
-  const tri = stats.triage.status;
-  const triTotal = Object.values(tri).reduce((a, b) => a + b, 0);
-  const cen = stats.centering.current;
-  const cenTotal = Object.values(cen).reduce((a, b) => a + b, 0);
+  const by = Object.fromEntries(stations.map((s) => [s.id, s])) as Record<StationId, StationStats>;
+  const needsYou = stations.reduce((a, s) => a + (s.states.low ?? 0), 0);
   const version = stats.centering.versions?.[0];
 
   return (
-    <div className="space-y-8">
-      <div>
-        <div className="flex items-baseline gap-3">
-          <h1 className="text-lg font-semibold">Pre-grading factory</h1>
-          <Link to="/factory/history" className="text-xs text-accent hover:underline">my review history →</Link>
-        </div>
-        <p className="text-muted text-xs mt-1 max-w-3xl">
-          Every graded copy the market tracker finds on eBay or Fanatics goes down this line. Each stage runs
-          automatically, stores its result next to the photo, and flags what it isn't sure about for review.
-          A person's correction never overwrites the machine's answer: it's saved alongside it, which is what the next
-          engine version is tuned against.
-        </p>
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-baseline gap-3">
+        <h1 className="text-lg font-semibold">Pre-grading factory</h1>
+        <span className="text-xs text-muted">
+          {n(needsYou)} station checks need you · <Link to="/factory/history" className="text-accent hover:underline">my review history →</Link>
+        </span>
+      </div>
+      <p className="text-muted text-xs max-w-4xl">
+        Every graded copy from eBay and Fanatics rides the belt through each machine. A machine answers on its own and says how
+        sure it is: <span className="text-green">high</span> passes automatically, <span className="text-yellow">medium</span> passes
+        but is worth a spot-check, <span className="text-red-400">needs you</span> waits for a person. Your corrections are stored next
+        to the machine's answer and are what the next version is tuned against.
+      </p>
+
+      {/* inputs */}
+      <div className="flex flex-wrap items-stretch gap-2">
+        <Feeder title="Catalog" lines={[`${n(status.cards_synced)} cards`, `synced ${status.catalog_synced_at?.slice(5, 16).replace("T", " ") ?? "—"}`]} />
+        <Arrow label="" />
+        <Feeder title="Listings (eBay + Fanatics)" lines={[
+          `${n(stats.listings.copies)} copies`,
+          Object.entries(stats.listings.by_source).map(([k, v]) => `${k} ${n(v)}`).join(" · "),
+          `+${rate(by.card?.added_per_day)} a day into the line`,
+        ]} link={["all copies", "/copies"]} />
       </div>
 
-      {/* ── the line ─────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-3 items-stretch">
-        <Stage
-          step="0" title="Catalog" subtitle="cards synced from the market tracker"
-          rows={[["cards", n(status.cards_synced)], ["last sync", status.catalog_synced_at?.slice(0, 16).replace("T", " ") ?? "—"]]}
-          how="Every tracked card (game, set, number, language, release date, catalog image)."
-        />
-        <Stage
-          step="1" title="Listings" subtitle="graded copies from eBay + Fanatics"
-          rows={[
-            ["copies", n(stats.listings.copies)],
-            ...Object.entries(stats.listings.by_source).map(([k, v]) => [k, n(v)] as [string, string]),
-            ["with cert #", `${n(stats.listings.with_cert)} (${pct(stats.listings.with_cert, stats.listings.copies)})`],
-          ]}
-          how="The tracker's graded-copy feed: listing title, grader + grade, cert # when the listing has it, every photo URL."
-          links={[["all copies", "/copies"]]}
-        />
-        <Stage
-          step="2" title="Photo triage" subtitle="front, back and cert"
-          health={status.triage_paused}
-          rows={[
-            ["done", `${n(tri.done)} (${pct(tri.done ?? 0, triTotal)})`],
-            ["queued", n(tri.pending)],
-            ["needs AI / failed", `${n(tri.needs_ai)} / ${n(tri.failed)}`],
-            ["front + back stored", n(stats.triage.both_photos)],
-            ["reviewed by you", n(Object.values(stats.triage.reviewed).reduce((a, b) => a + b, 0))],
-          ]}
-          how="Matches each listing photo against the card's catalog image and a card back (SIFT features), picks the best front and back, reads the cert from the slab's QR code or barcode. Fanatics: photo 1 = front, 2 = back. No AI."
-          links={[[`review queue (${n(stats.triage.needs_review)})`, "/copies?review=needed"], ["spot-check done", "/copies?review=unreviewed&photos=both"]]}
-        />
-        <Stage
-          step="3" title="Centering" subtitle={version ? `engine v${version}` : "engine"}
-          health={status.centering_paused}
-          rows={[
-            ["photos measured", n(cenTotal)],
-            ["to check", n(cen.to_check)],
-            ["accepted as-is", n(cen.accepted)],
-            ["adjusted by you", n(cen.adjusted)],
-            ["no reference yet", n(stats.centering.unseeded)],
-            ["back templates", backTemplates(stats.centering.back_templates)],
-            ["front templates", `${n(stats.centering.front_templates)} cards`],
-          ]}
-          how="Finds the card's cut edge, straightens the card, then measures the inner border. With a template (v0.4) the printed design is aligned to a reference and the template's border lines are mapped in; templates come from measurements you accept or adjust: one back per language covers every back, one front per card covers every copy of that card."
-          links={[["check centering", "/copies?centering=proposed"]]}
-        />
-        <Stage
-          step="4" title="Defects + grade" subtitle="later" todo
-          rows={[["status", "not built yet"]]}
-          how="Surface, corners and edges; then the backtest: where PSA 10 vs 9 actually breaks, per card, to get true gem rates for raw cards."
-        />
+      {/* the floor */}
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6 gap-3">
+        <Machine s={by.card} n0="1" power="photo matched against the catalog image (SIFT) · AI label check when unsure" worker={status.triage_paused} />
+        <Machine s={by.grade} n0="2" power="CGC QR codes carry the grade · AI label check; otherwise the listing title" worker={status.triage_paused} />
+        <Machine s={by.cert} n0="3" power="QR code / barcode on the slab · AI reads the label when they fail" worker={status.triage_paused} />
+        <Machine s={by.photos} n0="4" power="best full front and back by match strength, size and sharpness (Fanatics: fixed order)" worker={status.triage_paused} />
+        <Machine s={by.front} n0="5" power={`centering engine${version ? ` v${version}` : ""}: cut edge, then inner border (template when the card has one)`} worker={status.centering_paused} />
+        <Machine s={by.back} n0="6" power={`centering engine${version ? ` v${version}` : ""} · back templates ${backTemplates(stats.centering.back_templates)}`} worker={status.centering_paused} />
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <Later n0="7" title="Corners" text="Each corner front and back: a clean quarter circle? Whitening from a dull blade on the back?" />
+        <Later n0="8" title="Edges" text="Each edge: fraying, silvering and other cutting imperfections. Then the backtest: where PSA 10 vs 9 actually breaks." />
       </div>
 
       <Feedback stats={stats} />
@@ -106,46 +77,79 @@ export default function Factory() {
   );
 }
 
+const rate = (v?: number) => (v == null ? "—" : v >= 10 ? Math.round(v).toLocaleString() : v.toFixed(1));
+
+function Arrow({ label }: { label: string }) {
+  return <div className="flex items-center text-accent text-lg px-1" title={label}>→</div>;
+}
+
+function Feeder({ title, lines, link }: { title: string; lines: string[]; link?: [string, string] }) {
+  return (
+    <div className="bg-surface border border-border rounded-md px-3 py-2 min-w-48">
+      <div className="text-xs font-semibold">{title}</div>
+      {lines.map((l) => <div key={l} className="text-[11px] text-muted">{l}</div>)}
+      {link && <Link to={link[1]} className="text-[11px] text-accent hover:underline">{link[0]} →</Link>}
+    </div>
+  );
+}
+
+function Machine({ s, n0, power, worker }: { s?: StationStats; n0: string; power: string; worker?: string }) {
+  if (!s) return null;
+  const st = s.states;
+  const q = st.queued ?? 0;
+  const eta = s.processed_per_day > 0 && q > 0 ? q / s.processed_per_day : null;
+  const href = (state: string) => `/copies?station=${s.id}&state=${state}`;
+  const bin = (label: string, state: string, cls: string, hint: string) => (
+    <Link to={href(state)} title={hint} className={`flex justify-between items-baseline rounded px-2 py-1 border ${cls} hover:brightness-125`}>
+      <span className="text-[11px]">{label}</span>
+      <span className="font-mono text-sm">{n(st[state as keyof typeof st])}</span>
+    </Link>
+  );
+  return (
+    <div className="bg-surface border border-border rounded-md p-3 flex flex-col gap-2">
+      <div className="flex items-baseline gap-2">
+        <span className="font-mono text-[10px] text-accent">{n0}</span>
+        <span className="text-sm font-semibold">{s.label}</span>
+        <span className={`ml-auto text-[10px] ${worker ? "text-orange-400" : "text-green"}`} title={worker || "running"}>● {worker ? "paused" : "running"}</span>
+      </div>
+      <div className="text-[10px] text-muted leading-snug">{power}</div>
+
+      {/* in the machine */}
+      <Link to={href("queued")} className="bg-bg border border-border rounded px-2 py-1.5 hover:border-accent/50">
+        <div className="flex justify-between items-baseline">
+          <span className="text-[11px] text-muted">in the machine (automation queue)</span>
+          <span className="font-mono text-lg">{n(q)}</span>
+        </div>
+        <div className="text-[10px] text-muted">
+          +{rate(s.added_per_day)}/day in · {rate(s.processed_per_day)}/day done{eta != null ? ` · clears in ~${eta < 1 ? "<1" : Math.round(eta)} day${eta >= 1.5 ? "s" : ""}` : ""}
+        </div>
+        {(st.upstream ?? 0) > 0 && <div className="text-[10px] text-muted">{n(st.upstream)} waiting at earlier machines</div>}
+      </Link>
+
+      {/* output bins */}
+      <div className="space-y-1">
+        {bin("auto-passed · high", "high", "border-green/30 text-green", "the machine is sure; no review needed")}
+        {bin("auto-passed · medium", "medium", "border-yellow/30 text-yellow", "plausible but not proven; worth a spot-check")}
+        {bin("needs you", "low", "border-red-400/50 text-red-400 bg-red-500/5", "the machine is unsure or something disagrees")}
+        {bin(`reviewed by you${s.reviewed_per_day ? ` (${rate(s.reviewed_per_day)}/day)` : ""}`, "reviewed", "border-border text-[#e6edf3]", "a person decided this step")}
+        {(st.removed ?? 0) > 0 && bin("removed", "removed", "border-border text-muted", "removed from the dataset")}
+      </div>
+    </div>
+  );
+}
+
+function Later({ n0, title, text }: { n0: string; title: string; text: string }) {
+  return (
+    <div className="bg-surface border border-dashed border-border rounded-md p-3 opacity-60">
+      <div className="flex items-baseline gap-2"><span className="font-mono text-[10px] text-accent">{n0}</span><span className="text-sm font-semibold">{title}</span><span className="text-[10px] text-muted ml-auto">later</span></div>
+      <div className="text-[10px] text-muted mt-1">{text}</div>
+    </div>
+  );
+}
+
 function backTemplates(have?: string[]) {
   const h = new Set(have ?? []);
   return ["en", "ja"].map((l) => `${l} ${h.has(l) ? "✓" : "—"}`).join("  ");
-}
-
-function Stage({ step, title, subtitle, rows, how, links, health, todo }: {
-  step: string; title: string; subtitle: string; rows: [string, string][]; how: string;
-  links?: [string, string][]; health?: string; todo?: boolean;
-}) {
-  return (
-    <div className={`relative bg-surface border rounded-md p-3 flex flex-col ${todo ? "border-dashed border-border opacity-60" : "border-border"}`}>
-      <div className="flex items-baseline gap-2">
-        <span className="text-[10px] text-accent font-mono">{step}</span>
-        <span className="text-sm font-semibold">{title}</span>
-        {health !== undefined && (
-          <span className={`ml-auto text-[10px] ${health ? "text-orange-400" : "text-green"}`} title={health || "running"}>
-            {health ? "● paused" : "● running"}
-          </span>
-        )}
-      </div>
-      <div className="text-[10px] text-muted mb-2">{subtitle}</div>
-      <div className="space-y-0.5 text-xs">
-        {rows.map(([k, v]) => (
-          <div key={k} className="flex justify-between gap-2">
-            <span className="text-muted">{k}</span>
-            <span className="font-mono">{v}</span>
-          </div>
-        ))}
-      </div>
-      {health && <div className="text-[10px] text-orange-400 mt-1">{health}</div>}
-      <div className="text-[10px] text-muted mt-2 leading-snug flex-1">{how}</div>
-      {links && (
-        <div className="flex flex-wrap gap-2 mt-2">
-          {links.map(([label, to]) => (
-            <Link key={to} to={to} className="text-[11px] text-accent hover:underline">{label} →</Link>
-          ))}
-        </div>
-      )}
-    </div>
-  );
 }
 
 // ── tuning feedback ──────────────────────────────────────────────────────────
