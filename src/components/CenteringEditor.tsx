@@ -23,18 +23,6 @@ const RECT_W = 400;
 const RECT_H = 560;
 const DASH = [6, 4];
 
-const TAGS: { value: string; label: string }[] = [
-  { value: "outer_edge_wrong", label: "outer edge wrong" },
-  { value: "slab_edge_picked", label: "slab edge picked" },
-  { value: "inner_border_wrong", label: "inner border wrong" },
-  { value: "full_art_border_unclear", label: "full-art border unclear" },
-  { value: "copyright_text", label: "copyright text" },
-  { value: "glare", label: "glare / reflection" },
-  { value: "photo_too_small", label: "photo too small" },
-  { value: "card_cut_off", label: "card cut off" },
-  { value: "wrong_photo", label: "wrong photo" },
-  { value: "other", label: "other" },
-];
 
 type Side = keyof InnerMM;
 
@@ -547,7 +535,16 @@ export default function CenteringEditor({
             onPointerMove={onPhotoMove}
             onPointerUp={onPhotoUp}
             onWheel={onPhotoWheel}
-            onKeyDown={(e) => arrow(e, nudgeCorner)}
+            onKeyDown={(e) => {
+              if (e.key === "Tab") {           // Tab / Shift+Tab: next / previous corner
+                e.preventDefault();
+                e.stopPropagation();
+                const i = selCorner === null ? (e.shiftKey ? 3 : 0) : (selCorner + (e.shiftKey ? 3 : 1)) % 4;
+                focusCorner(i);
+                return;
+              }
+              arrow(e, nudgeCorner);
+            }}
           />
           <div className="flex flex-wrap items-center gap-1 mt-1">
             <span className="text-[10px] text-muted mr-1">outer edge:</span>
@@ -560,7 +557,7 @@ export default function CenteringEditor({
             <Nudge disabled={selCorner === null} onNudge={nudgeCorner} />
           </div>
           <div className="text-[10px] text-muted mt-0.5">
-            drag a corner onto the cut edge · wheel = zoom, drag empty space = pan · arrows = 1 px (Shift 10)
+            drag a corner onto the cut edge · wheel = zoom, drag empty space = pan · Tab / Shift+Tab = next / previous corner · arrows = 1 px (Shift 10)
           </div>
         </div>
         <div style={{ width: RECT_W }} className={stage === "outer" ? "opacity-60" : ""}>
@@ -573,7 +570,17 @@ export default function CenteringEditor({
             onPointerMove={onRectMove}
             onPointerUp={onRectUp}
             onWheel={onRectWheel}
-            onKeyDown={(e) => arrow(e, (dx, dy) => nudgeLine(selLine === "left" || selLine === "right" ? dx : dy))}
+            onKeyDown={(e) => {
+              if (e.key === "Tab") {           // Tab / Shift+Tab: next / previous border line
+                e.preventDefault();
+                e.stopPropagation();
+                const order: Side[] = ["top", "right", "bottom", "left"];
+                const cur = selLine ? order.indexOf(selLine) : -1;
+                focusSide(order[cur < 0 ? (e.shiftKey ? 3 : 0) : (cur + (e.shiftKey ? 3 : 1)) % 4]);
+                return;
+              }
+              arrow(e, (dx, dy) => nudgeLine(selLine === "left" || selLine === "right" ? dx : dy));
+            }}
           />
           <div className="flex flex-wrap items-center gap-1 mt-1">
             <span className="text-[10px] text-muted mr-1">inner border:</span>
@@ -587,7 +594,7 @@ export default function CenteringEditor({
               onNudge={(dx, dy) => nudgeLine(selLine === "left" || selLine === "right" ? dx : dy)} />
           </div>
           <div className="text-[10px] text-muted mt-0.5">
-            drag a green line onto the inner border · 1 nudge = 1 photo pixel ({(1 / srcPpmm).toFixed(3)} mm)
+            drag a green line onto the inner border · Tab / Shift+Tab = next / previous line · 1 nudge = 1 photo pixel ({(1 / srcPpmm).toFixed(3)} mm)
           </div>
         </div>
         <div className="w-56 space-y-3">
@@ -613,25 +620,11 @@ export default function CenteringEditor({
               ))}
             </div>
           )}
-          <div className="flex flex-wrap gap-1">
-            {TAGS.map((t) => {
-              const on = tags.includes(t.value);
-              return (
-                <button
-                  key={t.value}
-                  onClick={() => setTags(on ? tags.filter((x) => x !== t.value) : [...tags, t.value])}
-                  className={`text-[10px] rounded px-1.5 py-0.5 border ${on ? "border-accent text-accent bg-accent/10" : "border-border text-muted hover:text-[#e6edf3]"}`}
-                >
-                  {t.label}
-                </button>
-              );
-            })}
-          </div>
           <textarea
             value={note}
             onChange={(e) => setNote(e.target.value)}
-            rows={2}
-            placeholder="note (what the engine got wrong)"
+            rows={3}
+            placeholder="note: what the engine got wrong (e.g. picked the slab's inner wall on the left)"
             className="w-full bg-bg border border-border rounded px-2 py-1 text-xs outline-none focus:border-accent"
           />
           <div className="flex flex-col gap-1.5">

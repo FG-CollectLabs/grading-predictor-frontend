@@ -149,6 +149,27 @@ export default function CopyReview() {
     }
   }, [copy, steps, rejectedEarly, note, goNext]);
 
+  // Remove from the dataset: wrong card, card cut off, no usable photos ...
+  // Kept as a 'removed' marker (verdict unusable) rather than deleted, so the
+  // scraper doesn't add the same listing back; excluded from every queue, the
+  // centering worker and the backtest.
+  const removeCopy = useCallback(async (reason: string, note: string) => {
+    if (!copy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const tag = REMOVE_REASONS.find((r) => r.value === reason)?.tag ?? "other";
+      const text = [REMOVE_REASONS.find((r) => r.value === reason)?.label, note.trim()].filter(Boolean).join(": ");
+      if (copy.triage) await api.reviewCopy(copy.id, { verdict: "unusable", tags: [tag], note: text });
+      await api.postStep(copy.id, { step: "complete", decision: "rejected", tags: [tag], note: `removed from dataset · ${text}` });
+      await goNext();
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setBusy(false);
+    }
+  }, [copy, goNext]);
+
   // Your own photo replaces the listing photo for that side (the worker never
   // overwrites an upload); for when the grader's cert-page photo is better.
   const upload = useCallback(
@@ -263,6 +284,7 @@ export default function CopyReview() {
               >
                 {rejectedEarly ? "Mark unusable & next" : "Looks right & next"}
               </button>
+              <RemoveCopy busy={busy} onRemove={removeCopy} />
               <button onClick={() => goNext(true)} className="w-full text-xs border border-border text-muted rounded px-2 py-1 hover:text-[#e6edf3]"
                 title="leave this copy for later (not offered again this session)">
                 Skip copy <span className="opacity-60 text-[10px]">n</span>
@@ -369,6 +391,17 @@ export default function CopyReview() {
                 Pick the best full front and back from the listing photos (F / B). The picked listing photo is used right away;
                 the stored full-size copy downloads in the background. You can also drop your own photo (e.g. from the grader's cert page).
               </div>
+              <Actions busy={busy} actions={
+                frontChanged || backChanged
+                  ? [{ label: "Save picks → front centering", primary: true, onClick: async () => {
+                      await api.reviewCopy(copy.id, { verdict: "fixed", front_pos: frontChanged ? front ?? -1 : undefined,
+                        back_pos: backChanged ? back ?? -1 : undefined, tags: [frontChanged ? "wrong_front" : "", backChanged ? "wrong_back" : ""].filter(Boolean), note: "" });
+                      await loadCopy();
+                      await record("photos", "fixed", { tags: [frontChanged ? "wrong_front" : "", backChanged ? "wrong_back" : ""].filter(Boolean), payload: { front, back } });
+                    } },
+                     { label: "Undo", onClick: () => { setFront(t?.front_pos ?? null); setBack(t?.back_pos ?? null); } }]
+                  : [{ label: "Photos are right → front centering", primary: true, onClick: () => record("photos", "approved") }]
+              } />
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <Chosen side="front" view={frontView} onUpload={(f) => upload("front", f)} uploading={uploading === "front"} />
                 <Chosen side="back" view={backView} onUpload={(f) => upload("back", f)} uploading={uploading === "back"} />
@@ -382,17 +415,6 @@ export default function CopyReview() {
                   ))}
                 </div>
               )}
-              <Actions busy={busy} actions={
-                frontChanged || backChanged
-                  ? [{ label: "Save picks → front centering", primary: true, onClick: async () => {
-                      await api.reviewCopy(copy.id, { verdict: "fixed", front_pos: frontChanged ? front ?? -1 : undefined,
-                        back_pos: backChanged ? back ?? -1 : undefined, tags: [frontChanged ? "wrong_front" : "", backChanged ? "wrong_back" : ""].filter(Boolean), note: "" });
-                      await loadCopy();
-                      await record("photos", "fixed", { tags: [frontChanged ? "wrong_front" : "", backChanged ? "wrong_back" : ""].filter(Boolean), payload: { front, back } });
-                    } },
-                     { label: "Undo", onClick: () => { setFront(t?.front_pos ?? null); setBack(t?.back_pos ?? null); } }]
-                  : [{ label: "Photos are right → front centering", primary: true, onClick: () => record("photos", "approved") }]
-              } />
             </div>
           )}
 
@@ -468,6 +490,48 @@ function viewFor(side: string, stored: string | null, pick: CopyPhoto | null, us
 }
 
 // ── pieces ───────────────────────────────────────────────────────────────────
+
+const REMOVE_REASONS = [
+  { value: "wrong_card", label: "wrong card", tag: "wrong_card" },
+  { value: "fake_slab", label: "not a genuine slab", tag: "wrong_grader" },
+  { value: "cut_off", label: "card cut off / no full photo", tag: "poor_quality" },
+  { value: "bad_photos", label: "photos unusable (blur, glare, angle)", tag: "poor_quality" },
+  { value: "not_slab", label: "not a graded slab", tag: "not_a_slab" },
+  { value: "duplicate", label: "duplicate listing", tag: "duplicate_listing" },
+  { value: "other", label: "other", tag: "other" },
+];
+
+function RemoveCopy({ busy, onRemove }: { busy: boolean; onRemove: (reason: string, note: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState("cut_off");
+  const [note, setNote] = useState("");
+  if (!open) {
+    return (
+      <button onClick={() => setOpen(true)} title="drop this copy from the dataset (any step)"
+        className="w-full text-xs border border-red-400/40 text-red-400 rounded px-2 py-1 hover:bg-red-500/10">
+        Remove from dataset…
+      </button>
+    );
+  }
+  return (
+    <div className="border border-red-400/40 rounded p-2 space-y-1.5">
+      <div className="text-[10px] text-muted">Removed copies leave every queue, the centering worker and the backtest (kept as a marker so the scraper doesn't add it back).</div>
+      <select value={reason} onChange={(e) => setReason(e.target.value)}
+        className="w-full bg-bg border border-border rounded px-2 py-1 text-xs outline-none focus:border-accent">
+        {REMOVE_REASONS.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
+      </select>
+      <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="note (optional)"
+        className="w-full bg-bg border border-border rounded px-2 py-1 text-xs outline-none focus:border-accent" />
+      <div className="flex gap-1">
+        <button disabled={busy} onClick={() => onRemove(reason, note)}
+          className="flex-1 text-xs bg-red-500/20 text-red-400 border border-red-400/40 rounded px-2 py-1 hover:bg-red-500/30 disabled:opacity-40">
+          Remove & next
+        </button>
+        <button onClick={() => setOpen(false)} className="text-xs border border-border text-muted rounded px-2 py-1">Cancel</button>
+      </div>
+    </div>
+  );
+}
 
 function StepHeader({ step, decision }: { step: Step; decision?: StepDecision }) {
   const st = decision ? DECISION_STYLE[decision] : null;

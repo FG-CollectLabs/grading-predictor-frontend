@@ -406,6 +406,7 @@ export interface AIUsageRow {
   account: string;
   workspace: string;
   model: string;
+  purpose: string;   // repo a coding session worked in, or job:<name> for pipeline jobs
   requests: number;
   input_tokens: number;
   output_tokens: number;
