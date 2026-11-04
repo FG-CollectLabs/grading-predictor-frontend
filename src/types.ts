@@ -499,3 +499,34 @@ export interface RefQueueItem {
   needs_you: number;
   sample_front: string | null;
 }
+
+// ── Analytics & prediction ───────────────────────────────────────────────────
+
+export interface SetSummary {
+  set_code: string; set_name: string; language: string; game: string; era: string;
+  release_date: string | null; cards: number; copies: number; measured: number; psa10: number; psa9: number; image: string | null;
+}
+export interface SetCard {
+  id: number; card_name: string; card_number: string; rarity: string | null; image_url: string | null;
+  copies: number; measured: number; psa10: number; psa9: number; cgc: number; raw: number; market_display_key: string | null;
+}
+export interface GradeBucket {
+  grader: string; grade: string; copies: number; validated: number;
+  front_worse_side_q: number[] | null; back_worse_side_q: number[] | null;
+}
+export interface CardAnalytics {
+  card: CardDetail; centering_by_grade: GradeBucket[]; psa_gem_rate?: { pct: number; pop_total: number };
+}
+export interface PredictSide {
+  lr: number | null; tb: number | null; err_pp: number; status: string; validated: boolean; flags: string[]; measurement_id: number;
+}
+export interface GradeOutcome { grade: string; p: number; prior: number; n_eff: number; copies: number }
+export interface GraderPrediction {
+  grader: string; outcomes: GradeOutcome[]; prior_source: string; centering_cap?: string; note?: string;
+}
+export interface Prediction {
+  copy_id: number; card_id: number; status: "measuring" | "ready" | "unmeasurable";
+  centering: Partial<Record<"front" | "back", PredictSide>>;
+  worse_side?: { front: number; back: number };
+  predictions?: GraderPrediction[]; comparables?: Record<string, number>; caveats: string[];
+}
