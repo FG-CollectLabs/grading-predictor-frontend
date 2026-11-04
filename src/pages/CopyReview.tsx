@@ -17,7 +17,7 @@ type Step = { id: StepId; n: string; title: string; soon?: boolean };
 
 const STEPS: Step[] = [
   { id: "card", n: "0", title: "Correct card?" },
-  { id: "listing", n: "1", title: "Grade & grader match the slab?" },
+  { id: "listing", n: "1", title: "Genuine slab, right grade?" },
   { id: "cert", n: "2", title: "Cert number" },
   { id: "photos", n: "3", title: "Front & back photos" },
   { id: "front_outer", n: "4a", title: "Front · outer edge" },
@@ -55,6 +55,7 @@ export default function CopyReview() {
   const [uploading, setUploading] = useState<"front" | "back" | null>(null);
   // cert step state
   const [cert, setCert] = useState("");
+  const [dupOf, setDupOf] = useState<number | null>(null);
   const [note, setNote] = useState("");
 
   const loadCopy = useCallback(async () => {
@@ -81,7 +82,7 @@ export default function CopyReview() {
   }, [copyId, loadCopy]);
 
   const decided = useMemo(() => new Map((steps?.steps ?? []).map((s) => [s.step, s])), [steps]);
-  const rejectedEarly = decided.get("card")?.decision === "rejected" || decided.get("listing")?.decision === "rejected";
+  const rejectedEarly = (["card", "listing", "cert"] as StepId[]).some((s) => decided.get(s)?.decision === "rejected");
   const allDecided = rejectedEarly || REQUIRED.every((s) => decided.has(s));
 
   const nextOf = (s: StepId): StepId => {
@@ -110,13 +111,20 @@ export default function CopyReview() {
     [copyId],
   );
 
-  const goNext = useCallback(async () => {
+  const goNext = useCallback(async (skipThis = false) => {
     const p = new URLSearchParams(search);
-    p.set("limit", "3");
+    p.set("limit", "60");
     p.delete("offset");
+    // copies skipped this session aren't offered again (otherwise two skipped
+    // copies at the top of a queue bounce back and forth)
+    const skipped = new Set<number>(JSON.parse(sessionStorage.getItem("skippedCopies") ?? "[]"));
+    if (skipThis) {
+      skipped.add(copyId);
+      sessionStorage.setItem("skippedCopies", JSON.stringify([...skipped].slice(-500)));
+    }
     try {
       const list = await api.listCopies(p);
-      const next = list.items.find((c) => c.id !== copyId);
+      const next = list.items.find((c) => c.id !== copyId && !skipped.has(c.id));
       navigate(next ? `/copies/${next.id}${search}` : `/copies${search}`);
     } catch {
       navigate(`/copies${search}`);
@@ -164,7 +172,7 @@ export default function CopyReview() {
     function onKey(e: KeyboardEvent) {
       const el = e.target as HTMLElement;
       if (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "CANVAS") return;
-      if (e.key === "n") goNext();
+      if (e.key === "n") goNext(true);
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -252,7 +260,8 @@ export default function CopyReview() {
               >
                 {rejectedEarly ? "Mark unusable & next" : "Looks right & next"}
               </button>
-              <button onClick={goNext} className="w-full text-xs border border-border text-muted rounded px-2 py-1 hover:text-[#e6edf3]">
+              <button onClick={() => goNext(true)} className="w-full text-xs border border-border text-muted rounded px-2 py-1 hover:text-[#e6edf3]"
+                title="leave this copy for later (not offered again this session)">
                 Skip copy <span className="opacity-60 text-[10px]">n</span>
               </button>
               {decided.get("complete") && (
@@ -285,11 +294,13 @@ export default function CopyReview() {
 
           {active === "listing" && (
             <StepBody
-              hint={`The listing says ${gradeText(copy)}. Does the slab's label agree (grader and grade)?`}
+              hint={`The listing says ${gradeText(copy)}. Is it a genuine ${copy.grader} slab (their label, logo and holder, not a lookalike), and does the label show that grade?`}
               left={<Figure label="slab label (front)" src={frontView.src} sub={copy.source_title ?? undefined} tall />}
               actions={[
-                { label: `Yes, ${gradeText(copy)}`, primary: true, onClick: () => record("listing", "approved") },
-                { label: "Grade or grader is wrong", danger: true, onClick: () => record("listing", "rejected", { tags: ["wrong_grade"] }) },
+                { label: `Yes, genuine ${gradeText(copy)}`, primary: true, onClick: () => record("listing", "approved") },
+                { label: `Not a ${copy.grader} slab (other or fake grader)`, danger: true,
+                  onClick: () => record("listing", "rejected", { tags: ["wrong_grader"], note: `not a genuine ${copy.grader} slab` }) },
+                { label: "Different grade", danger: true, onClick: () => record("listing", "rejected", { tags: ["wrong_grade"] }) },
               ]}
               busy={busy}
             />
@@ -301,7 +312,20 @@ export default function CopyReview() {
               left={<Figure label="front label" src={frontView.src} tall />}
               right={<Figure label="back (QR)" src={backView.src} tall />}
               extra={
-                <div className="max-w-sm">
+                <div className="max-w-xl space-y-2">
+                  {dupOf && (
+                    <div className="text-xs border border-yellow/40 bg-yellow/5 rounded p-2 space-y-2">
+                      <div>
+                        Cert {cert.trim()} is already recorded on{" "}
+                        <Link to={`/copies/${dupOf}`} className="text-accent hover:underline">copy #{dupOf}</Link>: the same slab listed twice
+                        (often once on eBay and once on Fanatics). Keep one: mark this listing a duplicate so the slab isn't counted twice.
+                      </div>
+                      <Actions busy={busy} actions={[
+                        { label: "Mark this listing a duplicate", danger: true, onClick: () =>
+                          record("cert", "rejected", { tags: ["duplicate_listing"], note: `same slab as copy #${dupOf}`, payload: { duplicate_of: dupOf, cert: cert.trim() } }) },
+                      ]} />
+                    </div>
+                  )}
                   <label className="text-muted text-xs block mb-1">
                     Cert # {copy.cert_source && copy.cert_number && <span className="opacity-70">(from {copy.cert_source})</span>}
                   </label>
@@ -317,11 +341,18 @@ export default function CopyReview() {
               actions={
                 certChanged
                   ? [{ label: "Save corrected cert", primary: true, onClick: async () => {
-                      if (t) await api.reviewCopy(copy.id, { verdict: "fixed", cert_number: cert.trim(), tags: ["cert_wrong"], note: "" });
+                      setDupOf(null);
+                      try {
+                        if (t) await api.reviewCopy(copy.id, { verdict: "fixed", cert_number: cert.trim(), tags: ["cert_wrong"], note: "" });
+                      } catch (e) {
+                        const m = /copy (\d+)/.exec(String(e));
+                        if (m) { setDupOf(Number(m[1])); return; }   // same slab already recorded
+                        throw e;
+                      }
                       await loadCopy();
                       await record("cert", "fixed", { tags: ["cert_wrong"], payload: { cert: cert.trim(), was: copy.cert_number } });
                     } },
-                     { label: "Undo", onClick: () => setCert(copy.cert_number) }]
+                     { label: "Undo", onClick: () => { setCert(copy.cert_number); setDupOf(null); } }]
                   : [{ label: copy.cert_number ? "Cert is right" : "No cert visible", primary: true,
                        onClick: () => record("cert", copy.cert_number ? "approved" : "skipped") }]
               }
@@ -420,7 +451,7 @@ export default function CopyReview() {
 }
 
 const TRIAGE_TAGS = new Set(["wrong_front", "wrong_back", "closeup_picked", "better_photo_available", "wrong_card", "wrong_grade",
-  "not_a_slab", "multiple_cards", "poor_quality", "cert_wrong", "other"]);
+  "not_a_slab", "multiple_cards", "poor_quality", "cert_wrong", "other", "wrong_grader", "duplicate_listing"]);
 
 type View = { src: string | null; sub?: string; pending: boolean; stored: boolean };
 
@@ -449,13 +480,29 @@ function StepHeader({ step, decision }: { step: Step; decision?: StepDecision })
 type Action = { label: string; onClick: () => void | Promise<void>; primary?: boolean; danger?: boolean };
 
 function Actions({ actions, busy }: { actions: Action[]; busy: boolean }) {
+  const [err, setErr] = useState<string | null>(null);
+  const [running, setRunning] = useState(false);
+  const run = async (a: Action) => {
+    setErr(null);
+    setRunning(true);
+    try {
+      await a.onClick();
+    } catch (e) {
+      setErr(String(e).replace(/^Error: /, ""));
+    } finally {
+      setRunning(false);
+    }
+  };
   return (
+    <div className="space-y-1">
+    {err && <div className="text-xs text-red-400">Couldn't save: {err}</div>}
     <div className="flex flex-wrap gap-2">
       {actions.map((a) => (
         <button
           key={a.label}
-          disabled={busy}
-          onClick={() => { void a.onClick(); }}
+          disabled={busy || running}
+          onClick={() => { void run(a); }}
+          data-primary-action={a.primary ? "" : undefined}
           className={
             a.primary
               ? "bg-accent text-bg font-semibold px-4 py-1.5 rounded text-sm hover:bg-accent/90 disabled:opacity-40"
@@ -464,9 +511,10 @@ function Actions({ actions, busy }: { actions: Action[]; busy: boolean }) {
                 : "text-sm border border-border text-muted rounded px-3 py-1.5 hover:text-[#e6edf3] disabled:opacity-40"
           }
         >
-          {a.label}
+          {running ? "…" : a.label}
         </button>
       ))}
+    </div>
     </div>
   );
 }
@@ -481,7 +529,10 @@ function StepBody({ hint, left, right, extra, actions, busy }: {
     function onKey(e: KeyboardEvent) {
       const el = e.target as HTMLElement;
       if (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "CANVAS" || busy) return;
-      if (e.key === "Enter") { e.preventDefault(); void primary!.onClick(); }
+      if (e.key === "Enter") {
+        e.preventDefault();
+        (document.querySelector("[data-primary-action]") as HTMLButtonElement | null)?.click();
+      }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
