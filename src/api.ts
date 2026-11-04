@@ -158,6 +158,8 @@ export const api = {
   listCopies: (params: URLSearchParams) => get<CopyList>(`/v1/copies?${params.toString()}`),
   getCopy: (id: number) => get<CopyDetail>(`/v1/copies/${id}`),
   reviewCopy: (id: number, req: ReviewRequest) => post<CopyDetail>(`/v1/copies/${id}/review`, req),
+  gradeCorrection: (id: number, g: { grader: string; grade: number; grade_label: string; note: string }) =>
+    post<ReviewSteps>(`/v1/copies/${id}/grade-correction`, g),
   reevaluate: (id: number, note = "") => post<{ result: string; cleared_steps: number }>(`/v1/copies/${id}/reevaluate`, { note }),
   getSteps: (id: number) => get<ReviewSteps>(`/v1/copies/${id}/steps`),
   postStep: (id: number, req: { step: StepId; decision: StepDecision; note?: string; tags?: string[]; payload?: Record<string, unknown> }) =>

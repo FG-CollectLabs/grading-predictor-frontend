@@ -57,6 +57,7 @@ export default function CopyReview() {
   const [cert, setCert] = useState("");
   // the copy that already has the cert being saved, loaded to compare
   const [dupOf, setDupOf] = useState<CopyDetail | null>(null);
+  const [fixGrade, setFixGrade] = useState(false);
   const [note, setNote] = useState("");
 
   const loadCopy = useCallback(async () => {
@@ -358,8 +359,25 @@ export default function CopyReview() {
                 { label: `Yes, genuine ${gradeText(copy)}`, primary: true, onClick: () => record("listing", "approved") },
                 { label: `Not a ${copy.grader} slab (other or fake grader)`, danger: true,
                   onClick: () => record("listing", "rejected", { tags: ["wrong_grader"], note: `not a genuine ${copy.grader} slab` }) },
-                { label: "Different grade", danger: true, onClick: () => record("listing", "rejected", { tags: ["wrong_grade"] }) },
+                { label: "Different grade: correct it", onClick: () => setFixGrade(true) },
               ]}
+              extra={fixGrade ? (
+                <GradeFix copy={copy} busy={busy} onCancel={() => setFixGrade(false)} onSave={async (g) => {
+                  setBusy(true);
+                  setError(null);
+                  try {
+                    const s2 = await api.gradeCorrection(copy.id, g);
+                    setSteps(s2);
+                    await loadCopy();
+                    setFixGrade(false);
+                    setActive(nextOf("listing"));
+                  } catch (e) {
+                    setError(String(e));
+                  } finally {
+                    setBusy(false);
+                  }
+                }} />
+              ) : undefined}
               busy={busy}
             />
           )}
@@ -563,6 +581,50 @@ function viewFor(side: string, stored: string | null, pick: CopyPhoto | null, us
 }
 
 // ── pieces ───────────────────────────────────────────────────────────────────
+
+const GRADERS = ["PSA", "CGC", "BGS", "TAG", "SGC", "PCG"];
+const GRADES = Array.from({ length: 19 }, (_, i) => 10 - i * 0.5);   // 10, 9.5 ... 1
+
+/** Record what the slab's label says when the listing got it wrong. */
+function GradeFix({ copy, busy, onSave, onCancel }: {
+  copy: CopyDetail; busy: boolean;
+  onSave: (g: { grader: string; grade: number; grade_label: string; note: string }) => void; onCancel: () => void;
+}) {
+  const [grader, setGrader] = useState(copy.grader);
+  const [grade, setGrade] = useState<number>(copy.grade ?? 10);
+  const [label, setLabel] = useState<string>(copy.grade_label ?? "");
+  const [note, setNote] = useState("");
+  const input = "bg-bg border border-border rounded px-2 py-1 text-xs outline-none focus:border-accent";
+  return (
+    <div className="border border-yellow/40 bg-yellow/5 rounded p-2 space-y-2 max-w-2xl">
+      <div className="text-xs">
+        What does the slab's label say? The listing said <span className="font-semibold">{gradeText(copy)}</span>; that stays in the history.
+      </div>
+      <div className="flex flex-wrap gap-2 items-center">
+        <select value={grader} onChange={(e) => setGrader(e.target.value)} className={input}>
+          {GRADERS.map((g) => <option key={g}>{g}</option>)}
+        </select>
+        <select value={grade} onChange={(e) => { const v = Number(e.target.value); setGrade(v); if (v !== 10) setLabel(""); }} className={input}>
+          {GRADES.map((g) => <option key={g} value={g}>{g}</option>)}
+        </select>
+        <select value={label} disabled={grade !== 10} onChange={(e) => setLabel(e.target.value)} className={input} title="only on a 10">
+          <option value="">no label</option>
+          <option value="pristine">Pristine</option>
+          <option value="black_label">Black Label</option>
+          <option value="flawless">Flawless</option>
+        </select>
+        <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="note (e.g. blue label 9.5, listed as 10)" className={`${input} flex-1 min-w-48`} />
+      </div>
+      <div className="flex gap-2">
+        <button disabled={busy} onClick={() => onSave({ grader, grade, grade_label: label, note })}
+          className="bg-accent text-bg font-semibold px-3 py-1 rounded text-xs hover:bg-accent/90 disabled:opacity-40">
+          Save {grader} {grade}{label ? ` ${label.replace("_", " ")}` : ""} → next step
+        </button>
+        <button onClick={onCancel} className="text-xs border border-border text-muted rounded px-2 py-1">Cancel</button>
+      </div>
+    </div>
+  );
+}
 
 const REMOVE_REASONS = [
   { value: "wrong_card", label: "wrong card", tag: "wrong_card" },
