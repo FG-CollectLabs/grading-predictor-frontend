@@ -73,18 +73,22 @@ export default function CopyReview() {
     setCopy(null);
     setSteps(null);
     Promise.all([loadCopy(), api.getSteps(copyId), api.getCentering(copyId)])
-      .then(([, s, m]) => {
+      .then(([c, s, m]) => {
         setSteps(s);
         setCentering(m.measurements);
         const done = new Set(s.steps.map((x) => x.step));
-        setActive(REQUIRED.find((x) => !done.has(x)) ?? "back_inner");
+        // open at the first step that needs a person (not decided, machine not sure)
+        const open = REQUIRED.find((x) => !done.has(x) && c.stations?.[STEP_STATION[x]] !== "high");
+        setActive(open ?? REQUIRED.find((x) => !done.has(x)) ?? "back_inner");
       })
       .catch((e: unknown) => setError(String(e)));
   }, [copyId, loadCopy]);
 
   const decided = useMemo(() => new Map((steps?.steps ?? []).map((s) => [s.step, s])), [steps]);
   const rejectedEarly = (["card", "listing", "cert"] as StepId[]).some((s) => decided.get(s)?.decision === "rejected");
-  const allDecided = rejectedEarly || REQUIRED.every((s) => decided.has(s));
+  // a step is settled when a person decided it, or the machine is sure (high)
+  const machine = (s: StepId) => copy?.stations?.[STEP_STATION[s]];
+  const allDecided = rejectedEarly || REQUIRED.every((s) => decided.has(s) || machine(s) === "high");
 
   const nextOf = (s: StepId): StepId => {
     const i = REQUIRED.indexOf(s);
@@ -270,7 +274,9 @@ export default function CopyReview() {
                 >
                   <span className="font-mono text-[10px] w-5 text-muted">{s.n}</span>
                   <span className="flex-1">{s.title}</span>
-                  {s.soon ? <span className="text-[9px] text-muted">later</span> : st ? <span className={st.cls} title={`${st.label} by ${d!.decided_by}`}>{st.icon}</span> : <span className="text-muted">•</span>}
+                  {s.soon ? <span className="text-[9px] text-muted">later</span>
+                    : st ? <span className={st.cls} title={`${st.label} by ${d!.decided_by}`}>{st.icon}</span>
+                    : <MachineMark state={machine(s.id)} />}
                 </button>
               );
             })}
@@ -303,7 +309,7 @@ export default function CopyReview() {
         {/* ── the active step ───────────────────────────────────────────── */}
         <div className="min-w-0">
           {error && <div className="text-red-400 text-xs mb-2">{error}</div>}
-          <StepHeader step={STEPS.find((s) => s.id === active)!} decision={decided.get(active)?.decision} />
+          <StepHeader step={STEPS.find((s) => s.id === active)!} decision={decided.get(active)?.decision} machine={machine(active)} />
 
           {active === "card" && (
             <StepBody
@@ -555,13 +561,36 @@ function RemoveCopy({ busy, onRemove }: { busy: boolean; onRemove: (reason: stri
   );
 }
 
-function StepHeader({ step, decision }: { step: Step; decision?: StepDecision }) {
+// which factory station a review step belongs to
+const STEP_STATION: Record<string, string> = {
+  card: "card", listing: "grade", cert: "cert", photos: "photos",
+  front_outer: "front", front_inner: "front", back_outer: "back", back_inner: "back",
+};
+
+const MACHINE: Record<string, { icon: string; cls: string; text: string }> = {
+  high: { icon: "auto ✓", cls: "text-green", text: "machine is sure: auto-passed, no review needed" },
+  medium: { icon: "~", cls: "text-yellow", text: "machine thinks so but couldn't prove it: worth a quick look" },
+  low: { icon: "!", cls: "text-red-400", text: "machine is unsure or something disagrees: needs you" },
+  queued: { icon: "…", cls: "text-muted", text: "still in the machine's queue" },
+  upstream: { icon: "…", cls: "text-muted", text: "waiting for an earlier machine" },
+  "n/a": { icon: "–", cls: "text-muted", text: "doesn't apply to this copy" },
+};
+
+function MachineMark({ state }: { state?: string }) {
+  const m = state ? MACHINE[state] : undefined;
+  if (!m) return <span className="text-muted">•</span>;
+  return <span className={`text-[10px] ${m.cls}`} title={m.text}>{m.icon}</span>;
+}
+
+function StepHeader({ step, decision, machine }: { step: Step; decision?: StepDecision; machine?: string }) {
   const st = decision ? DECISION_STYLE[decision] : null;
+  const m = machine ? MACHINE[machine] : undefined;
   return (
-    <div className="flex items-baseline gap-2 mb-2">
+    <div className="flex flex-wrap items-baseline gap-2 mb-2">
       <span className="font-mono text-accent text-xs">{step.n}</span>
       <h2 className="text-sm font-semibold">{step.title}</h2>
       {st && <span className={`text-xs ${st.cls}`}>{st.icon} {st.label}</span>}
+      {m && !st && <span className={`text-xs ${m.cls}`}>{m.icon} · {m.text}</span>}
     </div>
   );
 }

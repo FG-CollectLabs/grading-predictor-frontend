@@ -47,6 +47,15 @@ const LANGS: Opt[] = [
   { value: "zh", label: "Chinese" },
 ];
 
+const STATION_LABEL: Record<string, string> = {
+  card: "card identification", grade: "grader & grade", cert: "cert number", photos: "front & back photos",
+  front: "front centering", back: "back centering",
+};
+const STATE_LABEL: Record<string, string> = {
+  queued: "in the automation queue", upstream: "waiting at earlier machines", high: "auto-passed (high)",
+  medium: "auto-passed (medium)", low: "needs you", reviewed: "reviewed by you", removed: "removed", auto: "auto-passed",
+};
+
 export const FLAG_LABELS: Record<string, string> = {
   no_front: "no front",
   no_back: "no back",
@@ -125,6 +134,16 @@ export default function Copies() {
         <span className="text-[#e6edf3]">Copies</span>
       </div>
 
+      {params.get("station") && (
+        <div className="bg-accent/5 border border-accent/30 rounded-md px-3 py-2 mb-3 text-xs flex items-center gap-2">
+          <span>
+            Factory station <span className="font-semibold">{STATION_LABEL[params.get("station")!] ?? params.get("station")}</span> ·{" "}
+            <span className="font-semibold">{STATE_LABEL[params.get("state") ?? ""] ?? params.get("state")}</span>
+          </span>
+          <button onClick={() => { const p = new URLSearchParams(params); p.delete("station"); p.delete("state"); p.delete("offset"); setParams(p); }}
+            className="ml-auto text-muted hover:text-accent">clear ✕</button>
+        </div>
+      )}
       <div className="bg-surface border border-border rounded-md p-4 mb-4 space-y-3">
         <ChipRow label="Review" opts={REVIEW} value={params.get("review") ?? ""} counts={countFor} onPick={(v) => set("review", v)} />
         <ChipRow label="Photos" opts={PHOTOS} value={params.get("photos") ?? ""} counts={countFor} onPick={(v) => set("photos", v)} />

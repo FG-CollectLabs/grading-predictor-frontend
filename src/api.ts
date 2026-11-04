@@ -21,6 +21,7 @@ import type {
   IngestStatus,
   FactoryStats,
   AIUsageSummary,
+  StationStats,
   ReviewSteps,
   ReviewEvent,
   StepId,
@@ -152,6 +153,7 @@ export const api = {
 
   getIngestStatus: () => get<IngestStatus>("/v1/ingest/status"),
   getFactory: () => get<FactoryStats>("/v1/factory"),
+  getStations: () => get<{ stations: StationStats[] }>("/v1/factory/stations"),
   getAIUsage: (days = 45) => get<AIUsageSummary>(`/v1/ai-usage?days=${days}`),
   listCopies: (params: URLSearchParams) => get<CopyList>(`/v1/copies?${params.toString()}`),
   getCopy: (id: number) => get<CopyDetail>(`/v1/copies/${id}`),
