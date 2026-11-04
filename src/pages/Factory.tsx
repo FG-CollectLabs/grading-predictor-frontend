@@ -13,12 +13,13 @@ export default function Factory() {
   const [stats, setStats] = useState<FactoryStats | null>(null);
   const [status, setStatus] = useState<IngestStatus | null>(null);
   const [stations, setStations] = useState<StationStats[] | null>(null);
+  const [stationsAsOf, setStationsAsOf] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const load = () =>
       Promise.all([api.getFactory(), api.getIngestStatus(), api.getStations()])
-        .then(([f, s, st]) => { setStats(f); setStatus(s); setStations(st.stations); setError(null); })
+        .then(([f, s, st]) => { setStats(f); setStatus(s); setStations(st.stations); setStationsAsOf(st.as_of ?? null); setError(null); })
         .catch((e: unknown) => setError(String(e)));
     load();
     const t = setInterval(load, 60000);
@@ -28,6 +29,7 @@ export default function Factory() {
   if (error) return <div className="text-red-400 py-12 text-center">{error}</div>;
   if (!stats || !status || !stations) return <div className="text-muted py-12 text-center">Loading the factory floor…</div>;
 
+  const asOf = stationsAsOf ? ago(stationsAsOf) : null;
   const by = Object.fromEntries(stations.map((s) => [s.id, s])) as Record<StationId, StationStats>;
   const needsYou = stations.reduce((a, s) => a + (s.states.low ?? 0), 0);
   const version = stats.centering.versions?.[0];
@@ -38,6 +40,7 @@ export default function Factory() {
         <h1 className="text-lg font-semibold">Pre-grading factory</h1>
         <span className="text-xs text-muted">
           {n(needsYou)} station checks need you · <Link to="/factory/history" className="text-accent hover:underline">my review history →</Link>
+          {asOf && <> · numbers as of {asOf} (refreshed every few minutes; links show exact lists)</>}
         </span>
       </div>
       <p className="text-muted text-xs max-w-4xl">
@@ -75,6 +78,11 @@ export default function Factory() {
       <Feedback stats={stats} />
     </div>
   );
+}
+
+function ago(iso: string): string {
+  const m = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+  return m <= 0 ? "just now" : m === 1 ? "1 minute ago" : `${m} minutes ago`;
 }
 
 const rate = (v?: number) => (v == null ? "—" : v >= 10 ? Math.round(v).toLocaleString() : v.toFixed(1));
