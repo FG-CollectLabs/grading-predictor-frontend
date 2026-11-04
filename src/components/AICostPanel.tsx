@@ -51,8 +51,8 @@ export default function AICostPanel({ compact = false }: { compact?: boolean }) 
       ) : (
         <>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <Tile value={usd(data.month_to_date_api_usd)} label={`API-equivalent, ${monthName(data.month_start)} to date`} />
-            <Tile value={usd(paidToDate)} label={`actually paid to date (${usd(data.subscription_usd_monthly, 0)}/mo subscriptions)`} />
+            <Tile value={usd(data.month_to_date_api_usd)} label={`what it would have cost on the API, ${monthName(data.month_start)} to date`} />
+            <Tile value={usd(paidToDate)} label={`what we actually paid, ${monthName(data.month_start)} to date (${usd(data.subscription_usd_monthly, 0)}/mo subscriptions)`} />
             <Tile value={multiple == null ? "—" : `${multiple.toFixed(0)}×`} label="API value per subscription dollar" />
             <Tile value={usd(data.last_30_days_api_usd)} label="API-equivalent, last 30 days" />
           </div>
@@ -60,7 +60,7 @@ export default function AICostPanel({ compact = false }: { compact?: boolean }) 
             API-equivalent = the same tokens at Anthropic API list prices. A plan's exact token allowance isn't published, so
             "share of allowance used" can't be measured; the multiple shows how much API spend the subscriptions are covering.
           </div>
-          {!compact && <Details rows={data.rows} />}
+          {!compact && <Breakdown rows={data.rows} />}
         </>
       )}
     </div>
@@ -81,6 +81,26 @@ function Tile({ value, label }: { value: string; label: string }) {
 }
 
 // ── daily chart + tables ─────────────────────────────────────────────────────
+
+/** Collapsed by default: the tiles say what we'd have paid vs. what we paid;
+ * the breakdown shows what the tokens went to. */
+function Breakdown({ rows }: { rows: AIUsageRow[] }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="mt-3">
+      <button onClick={() => setOpen(!open)} className="text-xs text-accent hover:underline">
+        {open ? "▾ Hide breakdown" : "▸ Show breakdown: what the tokens were used for"}
+      </button>
+      {open && <Details rows={rows} />}
+    </div>
+  );
+}
+
+function purposeLabel(p: string): string {
+  if (!p) return "(not attributed)";
+  if (p.startsWith("job:")) return `pipeline job · ${p.slice(4)}`;
+  return p;
+}
 
 function Details({ rows }: { rows: AIUsageRow[] }) {
   const [hover, setHover] = useState<number | null>(null);
@@ -201,6 +221,8 @@ function Details({ rows }: { rows: AIUsageRow[] }) {
         </div>
       </div>
 
+      <UsageTable title="What the tokens were used for (last 30 days): repo a session worked in, or a pipeline job"
+        rows={totals((r) => `${r.workspace} · ${purposeLabel(r.purpose)}`)} />
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <UsageTable title="By workspace (last 30 days)" rows={totals((r) => r.workspace)} />
         <UsageTable title="By model (last 30 days)" rows={totals((r) => r.model)} />
