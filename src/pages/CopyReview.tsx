@@ -175,6 +175,25 @@ export default function CopyReview() {
     }
   }, [copy, goNext]);
 
+  // Re-run the checks on this copy (after replacing its photos): reopens the
+  // steps (history keeps them) and clears the AI label / photo checks.
+  const [reevalMsg, setReevalMsg] = useState<string | null>(null);
+  const reevaluate = useCallback(async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const r = await api.reevaluate(copyId, "re-evaluate after photo change");
+      const [s] = await Promise.all([api.getSteps(copyId), loadCopy()]);
+      setSteps(s);
+      setActive("card");
+      setReevalMsg(`Reopened ${r.cleared_steps} step${r.cleared_steps === 1 ? "" : "s"}. The AI label check re-reads card, grade and cert from the current photos within the hour; centering re-measures new photos within minutes.`);
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setBusy(false);
+    }
+  }, [copyId, loadCopy]);
+
   // Your own photo replaces the listing photo for that side (the worker never
   // overwrites an upload); for when the grader's cert-page photo is better.
   const upload = useCallback(
@@ -187,6 +206,7 @@ export default function CopyReview() {
         // a new photo is re-measured by the centering worker within a few minutes
         await api.postStep(copyId, { step: "photos", decision: "fixed", tags: ["better_photo_available"], payload: { uploaded: side } })
           .then(setSteps).catch(() => undefined);
+        setReevalMsg(`Your ${side} photo is stored. When both sides are replaced, press "Re-evaluate this copy" to run the card, grade and cert checks on them.`);
       } catch (e) {
         setError(String(e));
       } finally {
@@ -291,6 +311,12 @@ export default function CopyReview() {
               >
                 {rejectedEarly ? "Mark unusable & next" : "Looks right & next"}
               </button>
+              <button disabled={busy} onClick={reevaluate}
+                title="run every check again on the current photos (e.g. after uploading the grader's scans)"
+                className="w-full text-xs border border-accent/40 text-accent rounded px-2 py-1 hover:bg-accent/10 disabled:opacity-40">
+                Re-evaluate this copy
+              </button>
+              {reevalMsg && <div className="text-[10px] text-green">{reevalMsg}</div>}
               <RemoveCopy busy={busy} onRemove={removeCopy} />
               <button onClick={() => goNext(true)} className="w-full text-xs border border-border text-muted rounded px-2 py-1 hover:text-[#e6edf3]"
                 title="leave this copy for later (not offered again this session)">
@@ -419,6 +445,24 @@ export default function CopyReview() {
                 Pick the best full front and back from the listing photos (F / B). The picked listing photo is used right away;
                 the stored full-size copy downloads in the background. You can also drop your own photo (e.g. from the grader's cert page).
               </div>
+              {t?.detail?.ai_photos && (() => {
+                const ai = t.detail!.ai_photos!;
+                const same = (ai.front ?? null) === front && (ai.back ?? null) === back;
+                return (
+                  <div className="text-xs border border-accent/30 bg-accent/5 rounded p-2 flex flex-wrap items-center gap-2">
+                    <span>
+                      <span className="text-accent">AI pick</span>: front {ai.front ?? "none"}, back {ai.back ?? "none"}
+                      <span className="text-muted"> · {Math.round((ai.confidence ?? 0) * 100)}% sure · {ai.reason}</span>
+                    </span>
+                    {!same && (
+                      <button onClick={() => { setFront(ai.front ?? null); setBack(ai.back ?? null); }}
+                        className="ml-auto text-xs border border-accent/50 text-accent rounded px-2 py-0.5 hover:bg-accent/10">
+                        Use AI's picks
+                      </button>
+                    )}
+                  </div>
+                );
+              })()}
               <Actions busy={busy} actions={
                 frontChanged || backChanged
                   ? [{ label: "Save picks → front centering", primary: true, onClick: async () => {
@@ -438,6 +482,7 @@ export default function CopyReview() {
                 <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 xl:grid-cols-8 gap-2">
                   {copy.photos.map((p) => (
                     <PhotoPick key={p.position} photo={p} isFront={front === p.position} isBack={back === p.position}
+                      ai={t?.detail?.ai_photos?.front === p.position ? "front" : t?.detail?.ai_photos?.back === p.position ? "back" : undefined}
                       onFront={() => { setFront(front === p.position ? null : p.position); if (back === p.position) setBack(null); }}
                       onBack={() => { setBack(back === p.position ? null : p.position); if (front === p.position) setFront(null); }} />
                   ))}
@@ -800,8 +845,8 @@ function Chosen({ side, view, onUpload, uploading }: {
   );
 }
 
-function PhotoPick({ photo, isFront, isBack, onFront, onBack }: {
-  photo: CopyPhoto; isFront: boolean; isBack: boolean; onFront: () => void; onBack: () => void;
+function PhotoPick({ photo, isFront, isBack, onFront, onBack, ai }: {
+  photo: CopyPhoto; isFront: boolean; isBack: boolean; onFront: () => void; onBack: () => void; ai?: "front" | "back";
 }) {
   const ring = isFront ? "border-accent" : isBack ? "border-purple" : "border-border";
   return (
@@ -811,7 +856,10 @@ function PhotoPick({ photo, isFront, isBack, onFront, onBack }: {
       </a>
       <div className="flex items-center justify-between mt-1 text-[9px] text-muted">
         <span>#{photo.position}</span>
-        <span title="worker label / score">{photo.label ?? "unlabelled"}{photo.score ? ` ${photo.score.toFixed(2)}` : ""}</span>
+        <span title="worker label / score">
+          {ai && <span className="text-accent mr-1" title="the AI photo picker's choice">AI: {ai}</span>}
+          {photo.label ?? "unlabelled"}{photo.score ? ` ${photo.score.toFixed(2)}` : ""}
+        </span>
       </div>
       <div className="grid grid-cols-2 gap-1 mt-1">
         <button onClick={onFront} className={`text-[10px] rounded py-0.5 border ${isFront ? "bg-accent text-bg border-accent" : "border-border text-muted hover:text-accent"}`}>F</button>
