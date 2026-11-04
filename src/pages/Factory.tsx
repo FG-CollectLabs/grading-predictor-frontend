@@ -40,7 +40,10 @@ export default function Factory() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-lg font-semibold">Pre-grading factory</h1>
+        <div className="flex items-baseline gap-3">
+          <h1 className="text-lg font-semibold">Pre-grading factory</h1>
+          <Link to="/factory/history" className="text-xs text-accent hover:underline">my review history →</Link>
+        </div>
         <p className="text-muted text-xs mt-1 max-w-3xl">
           Every graded copy the market tracker finds on eBay or Fanatics goes down this line. Each stage runs
           automatically, stores its result next to the photo, and flags what it isn't sure about for review.

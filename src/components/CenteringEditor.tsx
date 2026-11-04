@@ -153,14 +153,21 @@ const SIDES: Side[] = ["left", "right", "top", "bottom"];
 
 // ── component ────────────────────────────────────────────────────────────────
 
+export type CenteringStage = "outer" | "inner" | "both";
+export type StageDecision = "approved" | "fixed" | "rejected";
+
 export default function CenteringEditor({
-  copyId, side, imagePath, measurements, onSaved,
+  copyId, side, imagePath, measurements, onSaved, stage = "both", onStageDone,
 }: {
   copyId: number;
   side: "front" | "back";
   imagePath: string | null;
   measurements: CenteringMeasurement[];
   onSaved: (ms: CenteringMeasurement[]) => void;
+  /** Step-by-step review: approve the outer edge first, then the inner border
+   * (the editor keeps one set of edits across both). "both" = one Accept. */
+  stage?: CenteringStage;
+  onStageDone?: (stage: "outer" | "inner", decision: StageDecision, info: Record<string, unknown>) => void;
 }) {
   const current = currentMeasurement(measurements);
   const [src, setSrc] = useState<ImageData | null>(null);
@@ -474,10 +481,19 @@ export default function CenteringEditor({
     const di = SIDES.some((k) => Math.abs(inner[k] - current.inner_mm![k]) > 0.002);
     return dq || di;
   }, [quad, inner, current]);
+  const innerChanged = useMemo(() => {
+    if (!current?.inner_mm || !inner) return !!inner && !current?.inner_mm;
+    return SIDES.some((k) => Math.abs(inner[k] - current.inner_mm![k]) > 0.002);
+  }, [inner, current]);
+
+  const outerChanged = useMemo(() => {
+    if (!current?.outer_quad || !quad) return !!quad && !current?.outer_quad;
+    return quad.some((p, i) => Math.hypot(p[0] - current.outer_quad![i][0], p[1] - current.outer_quad![i][1]) > 0.2);
+  }, [quad, current]);
 
   const save = useCallback(
-    async (action: "accept" | "adjust" | "reject") => {
-      if (!current) return;
+    async (action: "accept" | "adjust" | "reject"): Promise<number | null> => {
+      if (!current) return null;
       setSaving(true);
       setMsg(null);
       try {
@@ -491,8 +507,10 @@ export default function CenteringEditor({
         });
         onSaved(res.measurements);
         setMsg(action === "adjust" ? "Adjustment saved." : action === "accept" ? "Accepted." : "Marked unmeasurable.");
+        return res.id;
       } catch (e) {
         setMsg(String(e));
+        return null;
       } finally {
         setSaving(false);
       }
@@ -519,7 +537,7 @@ export default function CenteringEditor({
       </div>
       {imgErr && <div className="text-red-400 text-xs mb-2">{imgErr}</div>}
       <div className="flex flex-wrap gap-3 items-start">
-        <div style={{ width: PHOTO_W }}>
+        <div style={{ width: PHOTO_W }} className={stage === "inner" ? "opacity-60" : ""}>
           <canvas
             ref={photoRef}
             tabIndex={0}
@@ -545,7 +563,7 @@ export default function CenteringEditor({
             drag a corner onto the cut edge · wheel = zoom, drag empty space = pan · arrows = 1 px (Shift 10)
           </div>
         </div>
-        <div style={{ width: RECT_W }}>
+        <div style={{ width: RECT_W }} className={stage === "outer" ? "opacity-60" : ""}>
           <canvas
             ref={rectRef}
             tabIndex={0}
@@ -617,13 +635,29 @@ export default function CenteringEditor({
             className="w-full bg-bg border border-border rounded px-2 py-1 text-xs outline-none focus:border-accent"
           />
           <div className="flex flex-col gap-1.5">
-            <button
-              disabled={!current || saving || !quad || !inner}
-              onClick={() => save(changed ? "adjust" : "accept")}
-              className="bg-accent text-bg font-semibold px-3 py-1.5 rounded text-xs hover:bg-accent/90 disabled:opacity-40"
-            >
-              {changed ? "Save adjustment" : "Accept"}
-            </button>
+            {stage === "outer" ? (
+              <button
+                disabled={!current || !quad}
+                onClick={() => onStageDone?.("outer", outerChanged ? "fixed" : "approved", { quad })}
+                className="bg-accent text-bg font-semibold px-3 py-1.5 rounded text-xs hover:bg-accent/90 disabled:opacity-40"
+              >
+                {outerChanged ? "Outer edge adjusted → inner border" : "Outer edge is right → inner border"}
+              </button>
+            ) : (
+              <button
+                disabled={!current || saving || !quad || !inner}
+                onClick={async () => {
+                  const action = changed ? "adjust" : "accept";
+                  const mid = await save(action);
+                  if (mid != null) onStageDone?.("inner", innerChanged ? "fixed" : "approved", { measurement_id: mid, action, outer_changed: outerChanged, inner_changed: innerChanged });
+                }}
+                className="bg-accent text-bg font-semibold px-3 py-1.5 rounded text-xs hover:bg-accent/90 disabled:opacity-40"
+              >
+                {stage === "inner"
+                  ? changed ? "Save adjustment → next step" : "Inner border is right → next step"
+                  : changed ? "Save adjustment" : "Accept"}
+              </button>
+            )}
             {changed && current?.outer_quad && (
               <button
                 onClick={() => {
@@ -637,7 +671,10 @@ export default function CenteringEditor({
             )}
             <button
               disabled={!current || saving}
-              onClick={() => save("reject")}
+              onClick={async () => {
+                const mid = await save("reject");
+                if (mid != null) onStageDone?.(stage === "outer" ? "outer" : "inner", "rejected", { measurement_id: mid });
+              }}
               className="text-xs border border-red-400/40 text-red-400 rounded px-2 py-1 hover:bg-red-500/10 disabled:opacity-40"
             >
               Can't measure this photo

@@ -7,6 +7,7 @@ import Copies from "./pages/Copies";
 import CopyReview from "./pages/CopyReview";
 
 import Factory from "./pages/Factory";
+import ReviewHistory from "./pages/ReviewHistory";
 import Developer from "./pages/Developer";
 import AICostPanel from "./components/AICostPanel";
 
@@ -23,7 +24,7 @@ function Header() {
   const { pathname } = useLocation();
   return (
     <header className="border-b border-border">
-      <div className="flex items-baseline gap-4 px-6 pt-4 max-w-7xl mx-auto">
+      <div className="flex items-baseline gap-4 px-6 pt-4">
         <Link to="/" className="text-lg font-semibold hover:text-accent transition-colors">
           Grading Predictor
         </Link>
@@ -37,7 +38,7 @@ function Header() {
           github
         </a>
       </div>
-      <nav className="flex gap-1 px-6 max-w-7xl mx-auto mt-3">
+      <nav className="flex gap-1 px-6 mt-3">
         {TABS.map((t) =>
           t.soon ? (
             <span key={t.label} className="px-3 py-2 text-xs text-border cursor-default" title="planned">
@@ -65,7 +66,7 @@ export default function App() {
     <HashRouter>
       <div className="min-h-screen bg-bg text-[#e6edf3] font-mono text-sm">
         <Header />
-        <main className="max-w-7xl mx-auto px-6 py-6">
+        <main className="px-6 py-6">
           <Routes>
             <Route path="/" element={<><div className="mb-6"><AICostPanel compact /></div><CardList /></>} />
             <Route path="/cards/:id" element={<CardDetail />} />
@@ -74,6 +75,7 @@ export default function App() {
             <Route path="/intake" element={<Intake />} />
             <Route path="/certs/:id" element={<CertView />} />
             <Route path="/factory" element={<Factory />} />
+            <Route path="/factory/history" element={<ReviewHistory />} />
             <Route path="/copies" element={<Copies />} />
             <Route path="/copies/:id" element={<CopyReview />} />
             <Route path="/developer" element={<Developer />} />
