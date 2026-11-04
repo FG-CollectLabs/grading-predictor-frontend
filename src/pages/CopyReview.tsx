@@ -158,6 +158,9 @@ export default function CopyReview() {
       try {
         await api.uploadCertImage(copyId, side, file);
         await loadCopy();
+        // a new photo is re-measured by the centering worker within a few minutes
+        await api.postStep(copyId, { step: "photos", decision: "fixed", tags: ["better_photo_available"], payload: { uploaded: side } })
+          .then(setSteps).catch(() => undefined);
       } catch (e) {
         setError(String(e));
       } finally {
@@ -283,7 +286,7 @@ export default function CopyReview() {
             <StepBody
               hint="Does the listing actually show this card (name, number, set, language)?"
               left={<Figure label="catalog image" src={copy.card.image_url} />}
-              right={<Figure label="listing front" src={frontView.src} sub={frontView.sub} />}
+              right={<Figure label="listing front" src={frontView.src} sub={frontView.sub} onUpload={(f) => upload("front", f)} uploading={uploading === "front"} />}
               actions={[
                 { label: "Yes, correct card", primary: true, onClick: () => record("card", "approved") },
                 { label: "Wrong card", danger: true, onClick: () => record("card", "rejected", { tags: ["wrong_card"] }) },
@@ -295,7 +298,7 @@ export default function CopyReview() {
           {active === "listing" && (
             <StepBody
               hint={`The listing says ${gradeText(copy)}. Is it a genuine ${copy.grader} slab (their label, logo and holder, not a lookalike), and does the label show that grade?`}
-              left={<Figure label="slab label (front)" src={frontView.src} sub={copy.source_title ?? undefined} tall />}
+              left={<Figure label="slab label (front)" src={frontView.src} sub={copy.source_title ?? undefined} tall onUpload={(f) => upload("front", f)} uploading={uploading === "front"} />}
               actions={[
                 { label: `Yes, genuine ${gradeText(copy)}`, primary: true, onClick: () => record("listing", "approved") },
                 { label: `Not a ${copy.grader} slab (other or fake grader)`, danger: true,
@@ -309,8 +312,8 @@ export default function CopyReview() {
           {active === "cert" && (
             <StepBody
               hint="Is the cert number right? Compare it with the slab label (front) or the QR / barcode (back)."
-              left={<Figure label="front label" src={frontView.src} tall />}
-              right={<Figure label="back (QR)" src={backView.src} tall />}
+              left={<Figure label="front" src={frontView.src} tall onUpload={(f) => upload("front", f)} uploading={uploading === "front"} />}
+              right={<Figure label="back" src={backView.src} tall onUpload={(f) => upload("back", f)} uploading={uploading === "back"} />}
               extra={
                 <div className="max-w-xl space-y-2">
                   {dupOf && (
@@ -550,9 +553,14 @@ function StepBody({ hint, left, right, extra, actions, busy }: {
   );
 }
 
-function Figure({ label, src, sub, tall }: { label: string; src: string | null; sub?: string; tall?: boolean }) {
+function Figure({ label, src, sub, tall, onUpload, uploading }: {
+  label: string; src: string | null; sub?: string; tall?: boolean;
+  /** drop / paste / choose a replacement (e.g. the grader's cert-page scan) */
+  onUpload?: (f: File) => void; uploading?: boolean;
+}) {
+  const drop = useDrop(onUpload);
   return (
-    <div className="bg-surface border border-border rounded-md p-2">
+    <div className={`bg-surface border rounded-md p-2 ${drop.over ? "border-accent/60" : "border-border"}`} {...drop.props}>
       <div className="flex justify-between text-[10px] text-muted mb-1">
         <span className="uppercase tracking-widest">{label}</span>
         {sub && <span className="truncate ml-2">{sub}</span>}
@@ -564,7 +572,54 @@ function Figure({ label, src, sub, tall }: { label: string; src: string | null; 
       ) : (
         <div className="aspect-[5/7] max-h-[60vh] bg-bg border border-dashed border-border rounded flex items-center justify-center text-xs text-muted">no image</div>
       )}
+      {onUpload && <UploadLabel text={`drop, paste or choose the grader's scan / your own photo (${label})`} uploading={!!uploading} onUpload={onUpload} />}
     </div>
+  );
+}
+
+/** Drag-and-drop + paste (while the pointer is over the element) of one image. */
+function useDrop(onUpload?: (f: File) => void) {
+  const [over, setOver] = useState(false);
+  useEffect(() => {
+    if (!over || !onUpload) return;
+    function onPaste(e: ClipboardEvent) {
+      const f = Array.from(e.clipboardData?.files ?? []).find((x) => x.type.startsWith("image/"));
+      if (f) {
+        e.preventDefault();
+        onUpload!(f);
+      }
+    }
+    window.addEventListener("paste", onPaste);
+    return () => window.removeEventListener("paste", onPaste);
+  }, [over, onUpload]);
+  if (!onUpload) return { over: false, props: {} };
+  return {
+    over,
+    props: {
+      onMouseEnter: () => setOver(true),
+      onMouseLeave: () => setOver(false),
+      onDragOver: (e: React.DragEvent) => { e.preventDefault(); setOver(true); },
+      onDragLeave: () => setOver(false),
+      onDrop: (e: React.DragEvent) => {
+        e.preventDefault();
+        setOver(false);
+        const f = Array.from(e.dataTransfer.files).find((x) => x.type.startsWith("image/"));
+        if (f) onUpload(f);
+      },
+    },
+  };
+}
+
+function UploadLabel({ text, uploading, onUpload }: { text: string; uploading: boolean; onUpload: (f: File) => void }) {
+  return (
+    <label className="block text-center text-[10px] text-muted mt-1 cursor-pointer hover:text-accent">
+      {uploading ? "uploading…" : text}
+      <input type="file" accept="image/*" className="hidden" onChange={(e) => {
+        const f = e.target.files?.[0];
+        if (f) onUpload(f);
+        e.target.value = "";
+      }} />
+    </label>
   );
 }
 
@@ -609,32 +664,9 @@ export function certLookupUrl(grader: string, cert: string): string | null {
 function Chosen({ side, view, onUpload, uploading }: {
   side: string; view: View; onUpload: (f: File) => void; uploading: boolean;
 }) {
-  const [over, setOver] = useState(false);
-  // Paste works while the pointer is over this panel.
-  useEffect(() => {
-    if (!over) return;
-    function onPaste(e: ClipboardEvent) {
-      const f = Array.from(e.clipboardData?.files ?? []).find((x) => x.type.startsWith("image/"));
-      if (f) {
-        e.preventDefault();
-        onUpload(f);
-      }
-    }
-    window.addEventListener("paste", onPaste);
-    return () => window.removeEventListener("paste", onPaste);
-  }, [over, onUpload]);
+  const drop = useDrop(onUpload);
   return (
-    <div
-      className={`bg-surface border rounded-md p-2 ${over ? "border-accent/60" : "border-border"}`}
-      onMouseEnter={() => setOver(true)}
-      onMouseLeave={() => setOver(false)}
-      onDragOver={(e) => e.preventDefault()}
-      onDrop={(e) => {
-        e.preventDefault();
-        const f = Array.from(e.dataTransfer.files).find((x) => x.type.startsWith("image/"));
-        if (f) onUpload(f);
-      }}
-    >
+    <div className={`bg-surface border rounded-md p-2 ${drop.over ? "border-accent/60" : "border-border"}`} {...drop.props}>
       <div className="flex justify-between text-[10px] text-muted mb-1">
         <span className="uppercase tracking-widest">{side}</span>
         <span className={view.pending ? "text-yellow" : ""}>{view.sub ?? (view.stored ? "stored photo" : "")}</span>
@@ -648,14 +680,7 @@ function Chosen({ side, view, onUpload, uploading }: {
           pick a listing photo below, or drop your own
         </div>
       )}
-      <label className="block text-center text-[10px] text-muted mt-1 cursor-pointer hover:text-accent">
-        {uploading ? "uploading…" : `or drop, paste or choose your own ${side} photo`}
-        <input type="file" accept="image/*" className="hidden" onChange={(e) => {
-          const f = e.target.files?.[0];
-          if (f) onUpload(f);
-          e.target.value = "";
-        }} />
-      </label>
+      <UploadLabel text={`or drop, paste or choose your own ${side} photo`} uploading={uploading} onUpload={onUpload} />
     </div>
   );
 }

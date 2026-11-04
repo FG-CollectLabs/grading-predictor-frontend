@@ -1,14 +1,11 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { api, imageUrl } from "../api";
-import type { CenteringMeasurement, CopyDetail, FactoryStats, IngestStatus } from "../types";
-import { currentMeasurement, provenance, ratioText } from "../components/CenteringEditor";
-import { FLAG_LABELS, gradeText } from "./Copies";
+import { api } from "../api";
+import type { FactoryStats, IngestStatus } from "../types";
 
 // The pre-grading factory: how a graded copy moves from a marketplace listing
 // to a centering measurement, with live counts per stage, links into each
-// stage's review queue, one copy followed through every stage, and the
-// feedback the engine gets tuned against.
+// stage's review queue, and the feedback the engine gets tuned against.
 
 const n = (v: number | undefined | null) => (v ?? 0).toLocaleString();
 const pct = (a: number, b: number) => (b > 0 ? `${Math.round((100 * a) / b)}%` : "—");
@@ -104,8 +101,6 @@ export default function Factory() {
         />
       </div>
 
-      <FollowOne />
-
       <Feedback stats={stats} />
     </div>
   );
@@ -151,110 +146,6 @@ function Stage({ step, title, subtitle, rows, how, links, health, todo }: {
       )}
     </div>
   );
-}
-
-// ── one copy through every stage ─────────────────────────────────────────────
-
-function FollowOne() {
-  const [copy, setCopy] = useState<CopyDetail | null>(null);
-  const [cen, setCen] = useState<CenteringMeasurement[]>([]);
-  const [idInput, setIdInput] = useState("");
-  const [err, setErr] = useState<string | null>(null);
-
-  const load = async (id?: number) => {
-    setErr(null);
-    try {
-      let cid = id;
-      if (!cid) {
-        // a recent copy that has made it through centering
-        const p = new URLSearchParams({ centering: "proposed", photos: "both", limit: "12" });
-        const list = await api.listCopies(p);
-        if (!list.items.length) { setErr("No copy has reached centering yet."); return; }
-        cid = list.items[Math.floor(Math.random() * list.items.length)].id;
-      }
-      const [c, m] = await Promise.all([api.getCopy(cid), api.getCentering(cid)]);
-      setCopy(c);
-      setCen(m.measurements);
-      setIdInput(String(cid));
-    } catch (e) {
-      setErr(String(e));
-    }
-  };
-  useEffect(() => { load(); }, []);
-
-  return (
-    <div className="bg-surface border border-border rounded-md p-4">
-      <div className="flex flex-wrap items-center gap-3 mb-3">
-        <div className="text-sm font-semibold">Follow one copy through the line</div>
-        <button onClick={() => load()} className="text-xs border border-border rounded px-2 py-1 text-muted hover:text-accent">another copy</button>
-        <form onSubmit={(e) => { e.preventDefault(); if (Number(idInput)) load(Number(idInput)); }} className="flex gap-1">
-          <input value={idInput} onChange={(e) => setIdInput(e.target.value.replace(/\D/g, ""))} placeholder="copy #"
-            className="bg-bg border border-border rounded px-2 py-1 text-xs w-24 outline-none focus:border-accent" />
-        </form>
-        {copy && <Link to={`/copies/${copy.id}`} className="text-xs text-accent hover:underline ml-auto">open review screen →</Link>}
-      </div>
-      {err && <div className="text-xs text-muted">{err}</div>}
-      {copy && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          {/* stage 1 */}
-          <div>
-            <StepLabel n="1" t="Listing" />
-            <div className="text-xs font-semibold">{copy.card_name} <span className="text-muted font-normal">· {copy.set_name} #{copy.card_number}</span></div>
-            <div className="text-[11px] text-muted mt-1">“{copy.source_title ?? "—"}”</div>
-            <div className="text-[11px] mt-1">
-              {copy.source}{copy.source_ref && <> · <a href={copy.source_ref} target="_blank" rel="noreferrer" className="text-accent hover:underline">listing ↗</a></>}
-            </div>
-            <div className="text-[11px] mt-1"><span className="font-semibold">{gradeText(copy)}</span> · cert {copy.cert_number || "—"}{copy.cert_source ? ` (from ${copy.cert_source})` : ""}</div>
-          </div>
-          {/* stage 2 */}
-          <div>
-            <StepLabel n="2" t={`Photo triage: ${copy.photos.length} listing photos`} />
-            <div className="flex flex-wrap gap-1">
-              {copy.photos.map((p) => (
-                <div key={p.position} className={`w-14 border-2 rounded ${p.side === "front" ? "border-accent" : p.side === "back" ? "border-purple" : "border-transparent opacity-50"}`}>
-                  <img src={p.thumb_url} alt="" className="w-full aspect-square object-contain bg-bg" loading="lazy" />
-                  <div className="text-[8px] text-center text-muted truncate">{p.side ?? p.label ?? "—"}</div>
-                </div>
-              ))}
-            </div>
-            {copy.flags.length > 0 && (
-              <div className="flex flex-wrap gap-1 mt-1">
-                {copy.flags.map((f) => <span key={f} className="text-[9px] text-muted border border-border rounded px-1">{FLAG_LABELS[f] ?? f}</span>)}
-              </div>
-            )}
-          </div>
-          {/* stage 3 */}
-          <div>
-            <StepLabel n="3" t="Centering" />
-            <div className="grid grid-cols-2 gap-2">
-              {(["front", "back"] as const).map((side) => {
-                const ms = cen.filter((m) => m.side === side);
-                const m = currentMeasurement(ms);
-                const path = side === "front" ? copy.front_image : copy.back_image;
-                return (
-                  <div key={side} className="text-[11px]">
-                    {path && <img src={imageUrl(path)} alt={side} className="w-full aspect-[5/7] object-contain bg-bg rounded mb-1" loading="lazy" />}
-                    <div className="uppercase text-[9px] text-muted tracking-widest">{side}</div>
-                    {m ? (
-                      <>
-                        <div className="font-mono">L/R {ratioText(m.lr_left_pct)}</div>
-                        <div className="font-mono">T/B {ratioText(m.tb_top_pct)}</div>
-                        <div className="text-[9px] text-muted">{provenance(m, ms)} · {m.status}</div>
-                      </>
-                    ) : <div className="text-muted">not measured yet</div>}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function StepLabel({ n: num, t }: { n: string; t: string }) {
-  return <div className="text-[10px] uppercase tracking-widest text-muted mb-1"><span className="text-accent font-mono mr-1">{num}</span>{t}</div>;
 }
 
 // ── tuning feedback ──────────────────────────────────────────────────────────
