@@ -283,7 +283,11 @@ export interface CopyTriage {
   forced_front_pos: number | null;
   forced_back_pos: number | null;
   cert_source: string | null;
-  detail: { flags?: string[]; photos?: Record<string, { label: string; score: number; front_inliers: number; back_inliers: number } | null>; codes?: { fmt: string; text: string }[]; error?: string } | null;
+  detail: {
+    ai_photos?: { front: number | null; back: number | null; confidence: number; reason: string; model: string; at: string };
+    ai_label?: { card_name?: string; card_number?: string; grade?: number | null; grader?: string;
+      card_match?: boolean; grade_match?: boolean; grader_match?: boolean; cert_match?: boolean };
+    flags?: string[]; photos?: Record<string, { label: string; score: number; front_inliers: number; back_inliers: number } | null>; codes?: { fmt: string; text: string }[]; error?: string } | null;
   attempts: number;
   verdict: ReviewVerdict | null;
   review_tags: string[];
