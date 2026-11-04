@@ -148,6 +148,20 @@ export default function CopyReview() {
       skipped.add(copyId);
       sessionStorage.setItem("skippedCopies", JSON.stringify([...skipped].slice(-500)));
     }
+    // template queue: the next card whose first validated front fixes the most copies
+    if (p.get("queue") === "templates") {
+      // the queue is cached for a few minutes: don't offer this card again
+      skipped.add(copyId);
+      sessionStorage.setItem("skippedCopies", JSON.stringify([...skipped].slice(-500)));
+      try {
+        const q = await api.getTemplateQueue(0, 100);
+        const next = q.items.find((t) => t.copy_id !== copyId && !skipped.has(t.copy_id));
+        navigate(next ? `/copies/${next.copy_id}?queue=templates&station=front` : "/factory/templates");
+      } catch {
+        navigate("/factory/templates");
+      }
+      return;
+    }
     try {
       const list = await api.listCopies(p);
       const next = list.items.find((c) => c.id !== copyId && !skipped.has(c.id));

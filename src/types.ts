@@ -530,3 +530,8 @@ export interface Prediction {
   worse_side?: { front: number; back: number };
   predictions?: GraderPrediction[]; comparables?: Record<string, number>; caveats: string[];
 }
+
+export interface TemplateTask {
+  card_id: number; card_name: string; set_name: string; card_number: string; language: string | null;
+  image_url: string | null; copies: number; copy_id: number; flags: string[];
+}
