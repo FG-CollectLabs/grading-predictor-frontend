@@ -23,6 +23,7 @@ import type {
   AIUsageSummary,
   StationStats,
   RefQueueItem,
+  TemplateTask,
   SetSummary,
   SetCard,
   CardAnalytics,
@@ -176,6 +177,8 @@ export const api = {
     }
     return res.json() as Promise<{ copy_id: number; status: string }>;
   },
+  getTemplateQueue: (offset = 0, limit = 50) =>
+    get<{ items: TemplateTask[]; total: number; as_of: string }>(`/v1/template-queue?limit=${limit}&offset=${offset}`),
   getReferenceQueue: (state: "missing" | "to_confirm", offset = 0) =>
     get<{ items: RefQueueItem[]; total: number }>(`/v1/reference-queue?state=${state}&limit=50&offset=${offset}`),
   setReference: (cardId: number, body: { confirm?: boolean; reject?: boolean }) =>

@@ -59,6 +59,10 @@ export default function Factory() {
           Object.entries(stats.listings.by_source).map(([k, v]) => `${k} ${n(v)}`).join(" · "),
           `+${rate(by.card?.added_per_day)} a day into the line`,
         ]} link={["all copies", "/copies"]} />
+        <Feeder title="Card templates (best reviews)" lines={[
+          "one validated front per card",
+          "re-measures every copy of that card",
+        ]} link={["set templates", "/factory/templates"]} />
         {stats.references && (
           <Feeder title="Reference images (backfill)" lines={[
             `${n(stats.references.missing)} cards missing one`,
