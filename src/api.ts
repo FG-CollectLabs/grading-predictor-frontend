@@ -22,6 +22,7 @@ import type {
   FactoryStats,
   AIUsageSummary,
   StationStats,
+  RefQueueItem,
   ReviewSteps,
   ReviewEvent,
   StepId,
@@ -153,6 +154,20 @@ export const api = {
 
   getIngestStatus: () => get<IngestStatus>("/v1/ingest/status"),
   getFactory: () => get<FactoryStats>("/v1/factory"),
+  getReferenceQueue: (state: "missing" | "to_confirm", offset = 0) =>
+    get<{ items: RefQueueItem[]; total: number }>(`/v1/reference-queue?state=${state}&limit=50&offset=${offset}`),
+  setReference: (cardId: number, body: { confirm?: boolean; reject?: boolean }) =>
+    post<{ result: string; requeued: number }>(`/v1/cards/${cardId}/reference`, body),
+  uploadReference: async (cardId: number, file: File) => {
+    const form = new FormData();
+    form.append("image", file);
+    const res = await fetch(`${BASE}/v1/cards/${cardId}/reference`, { method: "POST", headers: authHeaders(), body: form });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error((err as { message?: string }).message ?? `upload: ${res.status}`);
+    }
+    return res.json() as Promise<{ result: string; requeued: number }>;
+  },
   getStations: () => get<{ stations: StationStats[]; as_of?: string }>("/v1/factory/stations"),
   getAIUsage: (days = 45) => get<AIUsageSummary>(`/v1/ai-usage?days=${days}`),
   listCopies: (params: URLSearchParams) => get<CopyList>(`/v1/copies?${params.toString()}`),

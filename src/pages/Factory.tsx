@@ -59,6 +59,13 @@ export default function Factory() {
           Object.entries(stats.listings.by_source).map(([k, v]) => `${k} ${n(v)}`).join(" · "),
           `+${rate(by.card?.added_per_day)} a day into the line`,
         ]} link={["all copies", "/copies"]} />
+        {stats.references && (
+          <Feeder title="Reference images (backfill)" lines={[
+            `${n(stats.references.missing)} cards missing one`,
+            `blocking ${n(stats.references.missing_copies)} copies`,
+            `${n(stats.references.to_confirm)} found by the finder, to confirm`,
+          ]} link={["backfill queue", "/factory/references"]} />
+        )}
       </div>
 
       {/* the floor */}

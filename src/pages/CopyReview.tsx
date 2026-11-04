@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { api, imageUrl } from "../api";
 import type { CenteringMeasurement, CopyDetail, CopyPhoto, ReviewSteps, StepDecision, StepId } from "../types";
@@ -79,7 +79,9 @@ export default function CopyReview() {
         setCentering(m.measurements);
         const done = new Set(s.steps.map((x) => x.step));
         // open at the first step that needs a person (not decided, machine not sure)
-        const open = REQUIRED.find((x) => !done.has(x) && c.stations?.[STEP_STATION[x]] !== "high");
+        const station = new URLSearchParams(window.location.hash.split("?")[1] ?? "").get("station");
+        const open = (station && REQUIRED.find((x) => !done.has(x) && STEP_STATION[x] === station))
+          || REQUIRED.find((x) => !done.has(x) && c.stations?.[STEP_STATION[x]] !== "high");
         setActive(open ?? REQUIRED.find((x) => !done.has(x)) ?? "back_inner");
       })
       .catch((e: unknown) => setError(String(e)));
@@ -96,12 +98,19 @@ export default function CopyReview() {
     return REQUIRED.slice(i + 1).find((x) => !decided.has(x)) ?? REQUIRED[Math.min(i + 1, REQUIRED.length - 1)];
   };
 
+  // Focus mode: arriving from a station's list (?station=card&state=low), only
+  // that station's steps are asked for, then the next copy in the list opens.
+  const focusStation = new URLSearchParams(search).get("station");
+  const [focus, setFocus] = useState(true);
+  const acted = useRef(false);   // a decision was made on this page (not just loaded)
+
   const record = useCallback(
     async (step: StepId, decision: StepDecision, extra: { note?: string; tags?: string[]; payload?: Record<string, unknown> } = {}, advance = true) => {
       setBusy(true);
       setError(null);
       try {
         const s = await api.postStep(copyId, { step, decision, ...extra });
+        acted.current = true;
         setSteps(s);
         if (advance) {
           const done = new Set(s.steps.map((x) => x.step));
@@ -116,6 +125,17 @@ export default function CopyReview() {
     },
     [copyId],
   );
+
+  useEffect(() => {
+    if (!focus || !focusStation || !steps || !acted.current) return;
+    const mine = Object.entries(STEP_STATION).filter(([, st]) => st === focusStation).map(([step]) => step);
+    const done = new Set(steps.steps.map((x) => x.step));
+    if (mine.length && mine.every((x) => done.has(x as StepId))) {
+      acted.current = false;
+      void goNextRef.current?.();
+    }
+  }, [steps, focus, focusStation]);
+  const goNextRef = useRef<(() => Promise<void>) | null>(null);
 
   const goNext = useCallback(async (skipThis = false) => {
     const p = new URLSearchParams(search);
@@ -136,6 +156,7 @@ export default function CopyReview() {
       navigate(`/copies${search}`);
     }
   }, [search, copyId, navigate]);
+  goNextRef.current = () => goNext();
 
   const complete = useCallback(async () => {
     if (!copy) return;
@@ -304,6 +325,15 @@ export default function CopyReview() {
             <div className="border-t border-border mt-2 pt-2 space-y-1.5">
               <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} placeholder="note for this copy (optional)"
                 className="w-full bg-bg border border-border rounded px-2 py-1 text-xs outline-none focus:border-accent" />
+              {focusStation && (
+                <label className="flex items-start gap-1.5 text-[11px] text-muted cursor-pointer">
+                  <input type="checkbox" checked={focus} onChange={(e) => setFocus(e.target.checked)} className="mt-0.5" />
+                  <span>
+                    Only the <span className="text-[#e6edf3]">{STATION_TITLE[focusStation] ?? focusStation}</span> step, then the next copy
+                    (untick to review the whole copy)
+                  </span>
+                </label>
+              )}
               <button
                 disabled={!allDecided || busy}
                 onClick={complete}
@@ -367,6 +397,7 @@ export default function CopyReview() {
                   setError(null);
                   try {
                     const s2 = await api.gradeCorrection(copy.id, g);
+                    acted.current = true;
                     setSteps(s2);
                     await loadCopy();
                     setFixGrade(false);
@@ -667,6 +698,11 @@ function RemoveCopy({ busy, onRemove }: { busy: boolean; onRemove: (reason: stri
     </div>
   );
 }
+
+const STATION_TITLE: Record<string, string> = {
+  card: "card identification", grade: "grader & grade", cert: "cert number", photos: "front & back photos",
+  front: "front centering", back: "back centering",
+};
 
 // which factory station a review step belongs to
 const STEP_STATION: Record<string, string> = {
