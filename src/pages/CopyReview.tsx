@@ -753,6 +753,7 @@ const MACHINE: Record<string, { icon: string; cls: string; text: string }> = {
   low: { icon: "!", cls: "text-red-400", text: "machine is unsure or something disagrees: needs you" },
   queued: { icon: "…", cls: "text-muted", text: "still in the machine's queue" },
   upstream: { icon: "…", cls: "text-muted", text: "waiting for an earlier machine" },
+  scans: { icon: "scans", cls: "text-red-400", text: "no listing photo shows this side in full: upload the grader's scan" },
   "n/a": { icon: "–", cls: "text-muted", text: "doesn't apply to this copy" },
 };
 

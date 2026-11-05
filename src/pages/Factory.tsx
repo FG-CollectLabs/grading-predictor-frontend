@@ -31,7 +31,7 @@ export default function Factory() {
 
   const asOf = stationsAsOf ? ago(stationsAsOf) : null;
   const by = Object.fromEntries(stations.map((s) => [s.id, s])) as Record<StationId, StationStats>;
-  const needsYou = stations.reduce((a, s) => a + (s.states.low ?? 0), 0);
+  const needsYou = stations.reduce((a, s) => a + (s.states.low ?? 0) + (s.states.scans ?? 0), 0);
   const version = stats.centering.versions?.[0];
 
   return (
@@ -46,7 +46,10 @@ export default function Factory() {
       <p className="text-muted text-xs max-w-4xl">
         Every graded copy from eBay and Fanatics rides the belt through each machine. A machine answers on its own and says how
         sure it is: <span className="text-green">high</span> passes automatically, <span className="text-yellow">medium</span> passes
-        but is worth a spot-check, <span className="text-red-400">needs you</span> waits for a person. Your corrections are stored next
+        but is worth a spot-check, <span className="text-red-400">needs you</span> waits for a person (the AI has already looked).
+        Gray counts are still with the machines. A copy with no full photo of the slab waits at
+        machine 4's <Link to="/factory/scans" className="text-accent hover:underline">pull scans</Link> list; the
+        machines before and after pick it up again once you've added the grader's scans. Your corrections are stored next
         to the machine's answer and are what the next version is tuned against.
       </p>
 
@@ -75,8 +78,8 @@ export default function Factory() {
       {/* the floor */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6 gap-3">
         <Machine s={by.card} n0="1" power="photo matched against the catalog image (SIFT) · AI label check when unsure" worker={status.triage_paused} />
-        <Machine s={by.grade} n0="2" power="CGC QR codes carry the grade · AI label check; otherwise the listing title" worker={status.triage_paused} />
-        <Machine s={by.cert} n0="3" power="QR code / barcode on the slab · AI reads the label when they fail" worker={status.triage_paused} />
+        <Machine s={by.grade} n0="2" power="AI reads grader and grade off the front label (CGC QR codes carry it too): agrees → passed, otherwise you" worker={status.triage_paused} />
+        <Machine s={by.cert} n0="3" power="QR code / barcode / title, else the AI's read (sure or not): only used to catch the same slab listed twice" worker={status.triage_paused} />
         <Machine s={by.photos} n0="4" power="best full front and back by match strength, size and sharpness (Fanatics: fixed order)" worker={status.triage_paused} />
         <Machine s={by.front} n0="5" power={`centering engine${version ? ` v${version}` : ""}: cut edge, then inner border (template when the card has one)`} worker={status.centering_paused} />
         <Machine s={by.back} n0="6" power={`centering engine${version ? ` v${version}` : ""} · back templates ${backTemplates(stats.centering.back_templates)}`} worker={status.centering_paused} />
@@ -150,6 +153,13 @@ function Machine({ s, n0, power, worker }: { s?: StationStats; n0: string; power
         {bin("auto-passed · high", "high", "border-green/30 text-green", "the machine is sure; no review needed")}
         {bin("auto-passed · medium", "medium", "border-yellow/30 text-yellow", "plausible but not proven; worth a spot-check")}
         {bin("needs you", "low", "border-red-400/50 text-red-400 bg-red-500/5", "the machine is unsure or something disagrees")}
+        {(st.scans ?? 0) > 0 && (
+          <Link to="/factory/scans" title="no listing photo shows the full slab: pull the grader's scans from the cert page"
+            className="flex justify-between items-baseline rounded px-2 py-1 border border-red-400/50 text-red-400 bg-red-500/5 hover:brightness-125">
+            <span className="text-[11px]">needs you · pull scans</span>
+            <span className="font-mono text-sm">{n(st.scans)}</span>
+          </Link>
+        )}
         {bin(`reviewed by you${s.reviewed_per_day ? ` (${rate(s.reviewed_per_day)}/day)` : ""}`, "reviewed", "border-border text-[#e6edf3]", "a person decided this step")}
         {(st.removed ?? 0) > 0 && bin("removed", "removed", "border-border text-muted", "removed from the dataset")}
       </div>
