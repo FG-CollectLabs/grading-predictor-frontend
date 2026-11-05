@@ -10,6 +10,7 @@ import Factory from "./pages/Factory";
 import ReviewHistory from "./pages/ReviewHistory";
 import References from "./pages/References";
 import Templates from "./pages/Templates";
+import Scans from "./pages/Scans";
 import Games from "./pages/analytics/Games";
 import Sets from "./pages/analytics/Sets";
 import SetCards from "./pages/analytics/SetCards";
@@ -96,6 +97,7 @@ export default function App() {
             <Route path="/factory/history" element={<ReviewHistory />} />
             <Route path="/factory/references" element={<References />} />
             <Route path="/factory/templates" element={<Templates />} />
+            <Route path="/factory/scans" element={<Scans />} />
             <Route path="/copies" element={<Copies />} />
             <Route path="/copies/:id" element={<CopyReview />} />
             <Route path="/developer" element={<Developer />} />

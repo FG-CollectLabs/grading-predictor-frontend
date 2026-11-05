@@ -473,7 +473,7 @@ export interface ReviewSteps {
 // ── Factory stations ─────────────────────────────────────────────────────────
 
 export type StationId = "card" | "grade" | "cert" | "photos" | "front" | "back";
-export type StationState = "upstream" | "queued" | "high" | "medium" | "low" | "reviewed" | "removed" | "n/a";
+export type StationState = "upstream" | "queued" | "high" | "medium" | "low" | "reviewed" | "removed" | "n/a" | "scans";
 
 export interface StationStats {
   id: StationId;
