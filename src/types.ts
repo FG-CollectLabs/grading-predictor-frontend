@@ -547,6 +547,7 @@ export interface InfraItem {
 }
 export interface InfraSummary {
   as_of: string | null; items: InfraItem[]; totals: Record<string, number>; app: Record<string, number>;
+  housekeeping?: { ran_at?: string; last_run?: Record<string, number | string>; totals?: Record<string, number> };
   rent: Record<string, number>; prices: { vcpu: number; gb_ram: number; gb_block: number; gb_bulk: number; source: string };
   actual_usd_monthly: number | null; warnings: string[];
 }

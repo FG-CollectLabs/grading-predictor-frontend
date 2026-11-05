@@ -45,9 +45,28 @@ export default function InfraPanel({ compact = false }: { compact?: boolean }) {
           {d.warnings.length > 0 && (
             <div className="mt-2 text-xs text-yellow space-y-0.5">{d.warnings.map((w) => <div key={w}>⚠ {w}</div>)}</div>
           )}
+          <Housekeeping d={d} />
           {!compact && <Details d={d} />}
         </>
       )}
+    </div>
+  );
+}
+
+// Daily photo cleanup (vision/centering/housekeeping.py): removed copies'
+// photos, orphan files, lossless recompression.
+function Housekeeping({ d }: { d: InfraSummary }) {
+  const h = d.housekeeping;
+  if (!h?.totals) return null;
+  const t = h.totals;
+  const freed = (t.removed_bytes ?? 0) + (t.orphan_bytes ?? 0) + (t.recompress_saved_bytes ?? 0);
+  const mb = (b: number) => (b >= GB ? `${(b / GB).toFixed(1)} GB` : `${Math.round(b / (1 << 20))} MB`);
+  return (
+    <div className="mt-2 text-[11px] text-muted">
+      Photo housekeeping{h.ran_at ? ` (last run ${new Date(h.ran_at).toLocaleDateString()})` : ""}: {mb(freed)} freed so far ·{" "}
+      {t.removed_files ?? 0} photos of removed copies ({mb(t.removed_bytes ?? 0)}) · {t.orphans ?? 0} orphan files ({mb(t.orphan_bytes ?? 0)}) ·{" "}
+      {t.recompressed ?? 0} recompressed losslessly ({mb(t.recompress_saved_bytes ?? 0)})
+      {h.last_run?.error ? <span className="text-red-400"> · last run failed: {String(h.last_run.error)}</span> : null}
     </div>
   );
 }
