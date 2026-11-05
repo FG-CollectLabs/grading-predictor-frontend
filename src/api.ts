@@ -158,6 +158,10 @@ export const api = {
     return res.json();
   },
 
+  /** A grader's scan by its address (PSA's scan host only; fetched by the API at full size). */
+  uploadCertImageFromUrl: (certId: number, side: "front" | "back", url: string) =>
+    post<unknown>(`/v1/certs/${certId}/images/from-url`, { side, url }),
+
   createInspection: (certId: number, req: CreateInspectionRequest) =>
     post<InspectionRow>(`/v1/certs/${certId}/inspections`, req),
   listInspections: (certId: number) => get<InspectionRow[]>(`/v1/certs/${certId}/inspections`),

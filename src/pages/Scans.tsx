@@ -35,7 +35,9 @@ export default function Scans() {
         <h1 className="text-lg font-semibold mt-1">Scans to pull</h1>
         <p className="text-muted text-xs mt-1 max-w-3xl">
           No listing photo shows the full slab on these sides. Open the grader's cert page, save their front / back scan, then
-          drop it on the missing side on the right (or click the box to choose a file, or copy the image and use "paste").
+          drop it on the missing side on the right. Dragging PSA's scan straight from the cert page works (the full-size
+          scan is fetched, not the small one the page shows); you can also click the box to choose a file, or copy the image
+          (or its address) and use "paste".
           When both sides are stored the copy moves on: the AI checks card, grade and cert on the new front, then centering
           measures it. No scans on the cert page either? Remove the copy.
         </p>
@@ -97,11 +99,13 @@ function Row({ c: initial, onDone }: { c: CopyRow; onDone: () => void }) {
   const [err, setErr] = useState<string | null>(null);
   const lookup = c.cert_number ? certLookupUrl(c.grader, c.cert_number) : null;
 
-  const upload = async (side: "front" | "back", file: File) => {
+  // a file, or the address of a grader's scan (dragged from the cert page)
+  const upload = async (side: "front" | "back", file: File | string) => {
     setBusy(side);
     setErr(null);
     try {
-      await api.uploadCertImage(c.id, side, file);
+      if (typeof file === "string") await api.uploadCertImageFromUrl(c.id, side, file);
+      else await api.uploadCertImage(c.id, side, file);
       const d = await api.getCopy(c.id);
       const next = { ...c, front_image: d.front_image, back_image: d.back_image };
       setC(next);
@@ -170,7 +174,18 @@ function Row({ c: initial, onDone }: { c: CopyRow; onDone: () => void }) {
   );
 }
 
-function Side({ side, path, busy, onFile }: { side: "front" | "back"; path: string | null; busy: boolean; onFile: (f: File) => void }) {
+// the image address in a drop from another page (Chrome hands over the URL,
+// not the file, when an image is dragged from a website)
+function droppedUrl(dt: DataTransfer): string | null {
+  const uri = dt.getData("text/uri-list").split("\n").map((s) => s.trim()).find((s) => s && !s.startsWith("#"));
+  if (uri) return uri;
+  const src = /<img[^>]+src="([^"]+)"/i.exec(dt.getData("text/html"))?.[1];
+  if (src) return src.replace(/&amp;/g, "&");
+  const text = dt.getData("text/plain").trim();
+  return /^https:\/\//.test(text) ? text : null;
+}
+
+function Side({ side, path, busy, onFile }: { side: "front" | "back"; path: string | null; busy: boolean; onFile: (f: File | string) => void }) {
   const [over, setOver] = useState(false);
   const [hint, setHint] = useState<string | null>(null);
   const id = useId();
@@ -185,7 +200,9 @@ function Side({ side, path, busy, onFile }: { side: "front" | "back"; path: stri
           return;
         }
       }
-      setHint("no image on the clipboard: right-click the scan → Copy image");
+      const text = (await navigator.clipboard.readText()).trim();
+      if (/^https:\/\//.test(text)) { setHint(null); onFile(text); return; }
+      setHint("no image on the clipboard: right-click the scan → Copy image (or Copy image address)");
     } catch {
       setHint("the browser blocked the clipboard: drop or choose the file");
     }
@@ -200,10 +217,11 @@ function Side({ side, path, busy, onFile }: { side: "front" | "back"; path: stri
           e.preventDefault();
           setOver(false);
           const f = [...e.dataTransfer.files].find((x) => x.type.startsWith("image/"));
+          const u = f ? null : droppedUrl(e.dataTransfer);
           if (f) { setHint(null); onFile(f); }
-          // dragged straight from another site: the browser often hands over
-          // only the image's address, which we can't fetch from here
-          else setHint("that was a link, not a file: save the image first, or right-click → Copy image → paste");
+          // dragged straight from the cert page: the API fetches the address
+          else if (u) { setHint(null); onFile(u); }
+          else setHint("nothing usable in that drop: save the image and drop the file, or right-click → Copy image → paste");
         }}
         className={`block aspect-[5/7] rounded border-2 cursor-pointer overflow-hidden ${
           over ? "border-accent bg-accent/10" : path ? "border-border" : "border-dashed border-red-400/60 bg-red-500/5"
