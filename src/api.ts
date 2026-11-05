@@ -34,6 +34,7 @@ import type {
   StepId,
   StepDecision,
   InfraSummary,
+  Setting,
 } from "./types";
 
 const BASE = import.meta.env.VITE_API_URL ?? "http://localhost:8084";
@@ -95,6 +96,8 @@ export const api = {
   listCertsForCard: (id: number) => get<CertRow[]>(`/v1/cards/${id}/certs`),
   createCard: (req: CreateCardRequest) => post<CardDetail>("/v1/cards", req),
   patchCard: (id: number, req: CreateCardRequest) => patch<CardDetail>(`/v1/cards/${id}`, req),
+  getSettings: () => get<{ settings: Setting[] }>(`/v1/settings`),
+  saveSettings: (changes: Record<string, number | boolean | null>) => patch<{ settings: Setting[] }>(`/v1/settings`, changes),
   deleteCard: async (id: number) => {
     const res = await fetch(`${BASE}/v1/cards/${id}`, {
       method: "DELETE",

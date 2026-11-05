@@ -14,6 +14,7 @@ import Games from "./pages/analytics/Games";
 import Sets from "./pages/analytics/Sets";
 import SetCards from "./pages/analytics/SetCards";
 import CardAnalytics from "./pages/analytics/CardAnalytics";
+import Settings from "./pages/Settings";
 import Developer from "./pages/Developer";
 
 // Tabs: Analytics (cards and their copies), Pre-grading factory (the pipeline
@@ -23,6 +24,7 @@ const TABS: { label: string; to: string; match: (p: string) => boolean; soon?: b
   { label: "Pre-grading factory", to: "/factory", match: (p) => p.startsWith("/factory") || p.startsWith("/copies") },
   { label: "Grader analytics", to: "/", match: () => false, soon: true },
   { label: "Developer", to: "/developer", match: (p) => p.startsWith("/developer") },
+  { label: "Settings", to: "/settings", match: (p) => p.startsWith("/settings") },
 ];
 
 function Header() {
@@ -97,6 +99,7 @@ export default function App() {
             <Route path="/copies" element={<Copies />} />
             <Route path="/copies/:id" element={<CopyReview />} />
             <Route path="/developer" element={<Developer />} />
+            <Route path="/settings" element={<Settings />} />
           </Routes>
         </main>
       </div>
