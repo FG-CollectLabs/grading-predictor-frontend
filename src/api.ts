@@ -204,7 +204,10 @@ export const api = {
     }
     return res.json() as Promise<{ result: string; requeued: number }>;
   },
-  getStations: () => get<{ stations: StationStats[]; as_of?: string }>("/v1/factory/stations"),
+  getStations: (fresh = false) => get<{ stations: StationStats[]; as_of?: string }>(`/v1/factory/stations${fresh ? "?fresh=1" : ""}`),
+  /** One decision for many copies at a station (same records as reviewing them one by one). */
+  bulkReview: (req: { station: string; action: "approve" | "reject" | "remove"; ids: number[]; note?: string; reason?: string }) =>
+    post<{ result: string; done: number; skipped: number }>("/v1/copies/bulk-review", req),
   getAIUsage: (days = 45) => get<AIUsageSummary>(`/v1/ai-usage?days=${days}`),
   listCopies: (params: URLSearchParams) => get<CopyList>(`/v1/copies?${params.toString()}`),
   getCopy: (id: number) => get<CopyDetail>(`/v1/copies/${id}`),
