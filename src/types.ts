@@ -547,7 +547,20 @@ export interface InfraItem {
 }
 export interface InfraSummary {
   as_of: string | null; items: InfraItem[]; totals: Record<string, number>; app: Record<string, number>;
+  capacity?: InfraCapacity;
   housekeeping?: { ran_at?: string; last_run?: Record<string, number | string>; totals?: Record<string, number> };
   rent: Record<string, number>; prices: { vcpu: number; gb_ram: number; gb_block: number; gb_bulk: number; source: string };
   actual_usd_monthly: number | null; warnings: string[];
+}
+
+export interface InfraCapacityDay {
+  day: string; new_listings: number; copies: number; photo_bytes: number; photo_total: number; db_bytes: number | null;
+}
+export interface InfraCapacity {
+  photo_bytes: number; photo_copies: number; bytes_per_copy: number;
+  budget_bytes: number | null; free_bytes: number | null; headroom_bytes: number | null;
+  photo_bytes_per_day_7d: number; copies_per_day_7d: number; new_listings_per_day_7d: number; new_listings_per_day_30d: number;
+  backlog_copies: number; over_cap_copies: number; db_bytes: number; db_bytes_per_day: number | null;
+  copies_that_fit: number | null; days_left_at_pace: number | null; days_left_keep_all: number | null;
+  steady_bytes_per_day: number; days: InfraCapacityDay[];
 }
