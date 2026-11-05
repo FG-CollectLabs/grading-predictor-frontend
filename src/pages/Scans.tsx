@@ -5,56 +5,81 @@ import type { CopyRow } from "../types";
 import { certLookupUrl } from "./CopyReview";
 
 // Scans to pull: copies whose listing has no photo showing the full front or
-// back (after the photo matcher and the AI picker had a go). For each one,
-// open the grader's cert page, save their scan and drop it here. Once both
-// sides are stored the copy goes on: a new front sends it back through the AI
-// card / grade / cert check, then to centering.
+// back (after the photo matcher, the AI picker and, when there's no cert, the
+// AI cert read had a go). For each one, open the grader's cert page, save
+// their scan and drop it here. Once both sides are stored the copy goes on: a
+// new front sends it back through the AI card / grade / cert check, then to
+// centering. Copies with no cert can't be looked up; they're listed apart.
 
 const PAGE = 50;
 
 export default function Scans() {
-  const [items, setItems] = useState<CopyRow[] | null>(null);
-  const [total, setTotal] = useState(0);
-  const [offset, setOffset] = useState(0);
-  const [err, setErr] = useState<string | null>(null);
+  // a drop that misses a target would make the browser open the image in a
+  // new tab: swallow those on this page
+  useEffect(() => {
+    const stop = (e: DragEvent) => e.preventDefault();
+    window.addEventListener("dragover", stop);
+    window.addEventListener("drop", stop);
+    return () => {
+      window.removeEventListener("dragover", stop);
+      window.removeEventListener("drop", stop);
+    };
+  }, []);
   const [done, setDone] = useState(0);
-
-  const load = useCallback(() => {
-    const q = new URLSearchParams({ station: "photos", state: "scans", limit: String(PAGE), offset: String(offset) });
-    api.listCopies(q).then((r) => { setItems(r.items); setTotal(r.total); }).catch((e: unknown) => setErr(String(e)));
-  }, [offset]);
-  useEffect(load, [load]);
-
-  const finished = (id: number) => {
-    setDone((d) => d + 1);
-    setItems((xs) => xs?.filter((x) => x.id !== id) ?? null);
-  };
-
-  if (err && !items) return <div className="text-red-400 text-xs">{err}</div>;
-  if (!items) return <div className="text-muted text-xs">loading…</div>;
+  const bump = () => setDone((d) => d + 1);
 
   return (
-    <div className="space-y-4 max-w-6xl">
+    <div className="space-y-6 max-w-6xl">
       <div>
         <div className="text-xs text-muted"><Link to="/factory" className="hover:text-accent">factory</Link> / scans to pull</div>
-        <h1 className="text-lg font-semibold mt-1">Scans to pull <span className="text-muted text-sm font-normal">({total.toLocaleString()})</span></h1>
+        <h1 className="text-lg font-semibold mt-1">Scans to pull</h1>
         <p className="text-muted text-xs mt-1 max-w-3xl">
           No listing photo shows the full slab on these sides. Open the grader's cert page, save their front / back scan, then
-          drop it on the missing side (or click it to choose a file, or copy the image and use "paste"). When both sides are
-          stored the copy moves on: the AI checks card, grade and cert on the new front, then centering measures it.
-          No scans on the cert page either? Remove the copy.
+          drop it on the missing side on the right (or click the box to choose a file, or copy the image and use "paste").
+          When both sides are stored the copy moves on: the AI checks card, grade and cert on the new front, then centering
+          measures it. No scans on the cert page either? Remove the copy.
         </p>
         {done > 0 && <div className="text-green text-xs mt-1">{done} done this session.</div>}
       </div>
 
-      {items.length === 0 ? (
-        <div className="text-muted text-xs">Nothing to pull{offset ? " on this page" : ""}.</div>
+      <Section cert="present" title="With a cert number" empty="Nothing to pull." onDone={bump} />
+      <Section cert="missing" title="No cert number (the AI couldn't read one): check the listing, or remove"
+        empty="None." onDone={bump} />
+    </div>
+  );
+}
+
+function Section({ cert, title, empty, onDone }: { cert: "present" | "missing"; title: string; empty: string; onDone: () => void }) {
+  const [items, setItems] = useState<CopyRow[] | null>(null);
+  const [total, setTotal] = useState(0);
+  const [offset, setOffset] = useState(0);
+  const [err, setErr] = useState<string | null>(null);
+
+  const load = useCallback(() => {
+    const q = new URLSearchParams({ station: "photos", state: "scans", cert, limit: String(PAGE), offset: String(offset) });
+    api.listCopies(q).then((r) => { setItems(r.items); setTotal(r.total); }).catch((e: unknown) => setErr(String(e)));
+  }, [cert, offset]);
+  useEffect(load, [load]);
+
+  const finished = (id: number) => {
+    onDone();
+    setTotal((t) => t - 1);
+    setItems((xs) => xs?.filter((x) => x.id !== id) ?? null);
+  };
+
+  return (
+    <section className="space-y-2">
+      <h2 className="text-sm font-semibold">{title} <span className="text-muted font-normal">({total.toLocaleString()})</span></h2>
+      {err && <div className="text-red-400 text-xs">{err}</div>}
+      {!items ? (
+        <div className="text-muted text-xs">loading…</div>
+      ) : items.length === 0 ? (
+        <div className="text-muted text-xs">{empty}</div>
       ) : (
         <div className="space-y-2">
           {items.map((c) => <Row key={c.id} c={c} onDone={() => finished(c.id)} />)}
         </div>
       )}
-
       {total > PAGE && (
         <div className="flex gap-3 text-xs">
           <button disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - PAGE))} className="text-accent disabled:text-muted">← previous</button>
@@ -62,7 +87,7 @@ export default function Scans() {
           <button disabled={offset + PAGE >= total} onClick={() => setOffset(offset + PAGE)} className="text-accent disabled:text-muted">next →</button>
         </div>
       )}
-    </div>
+    </section>
   );
 }
 
@@ -109,10 +134,8 @@ function Row({ c: initial, onDone }: { c: CopyRow; onDone: () => void }) {
   };
 
   return (
-    <div className="bg-surface border border-border rounded-md p-3 grid grid-cols-[88px_88px_1fr] gap-3 items-start">
-      <Side side="front" path={c.front_image} busy={busy === "front"} onFile={(f) => upload("front", f)} />
-      <Side side="back" path={c.back_image} busy={busy === "back"} onFile={(f) => upload("back", f)} />
-      <div className="min-w-0 text-xs space-y-1">
+    <div className="bg-surface border border-border rounded-md p-3 grid grid-cols-[1fr_auto] gap-4 items-center">
+      <div className="min-w-0 text-xs space-y-1.5">
         <div className="font-semibold truncate">
           {c.card_name} <span className="text-muted font-normal">#{c.card_number} · {c.set_name}{c.language && c.language !== "en" ? ` · ${c.language.toUpperCase()}` : ""}</span>
         </div>
@@ -121,15 +144,16 @@ function Row({ c: initial, onDone }: { c: CopyRow; onDone: () => void }) {
           {c.cert_number ? (
             <>
               <span className="font-mono">{c.cert_number}</span>
+              {c.cert_source === "ai" && <span className="text-[10px] text-muted"> (read by AI)</span>}
               <button className="ml-1 text-[10px] text-muted hover:text-accent" onClick={() => navigator.clipboard.writeText(c.cert_number)}>copy</button>
             </>
           ) : <span className="text-muted">not known</span>}
         </div>
         <div className="flex flex-wrap gap-3">
           {lookup ? (
-            <a href={lookup} target="_blank" rel="noreferrer" className="text-accent hover:underline">{c.grader} cert page ↗</a>
+            <a href={lookup} target="_blank" rel="noreferrer" className="text-accent hover:underline font-semibold">{c.grader} cert page ↗</a>
           ) : (
-            <span className="text-muted">{c.cert_number ? `no cert page link for ${c.grader}` : "no cert: check the listing"}</span>
+            <span className="text-muted">{c.cert_number ? `no cert page link for ${c.grader}` : "no cert to look up"}</span>
           )}
           {c.source_ref && <a href={c.source_ref} target="_blank" rel="noreferrer" className="text-accent hover:underline">listing ↗</a>}
           <Link to={`/copies/${c.id}?station=photos&state=scans`} className="text-accent hover:underline">open copy #{c.id}</Link>
@@ -138,12 +162,17 @@ function Row({ c: initial, onDone }: { c: CopyRow; onDone: () => void }) {
         {c.source_title && <div className="text-[10px] text-muted truncate">“{c.source_title}”</div>}
         {err && <div className="text-red-400 text-[10px]">{err}</div>}
       </div>
+      <div className="flex gap-3">
+        <Side side="front" path={c.front_image} busy={busy === "front"} onFile={(f) => upload("front", f)} />
+        <Side side="back" path={c.back_image} busy={busy === "back"} onFile={(f) => upload("back", f)} />
+      </div>
     </div>
   );
 }
 
 function Side({ side, path, busy, onFile }: { side: "front" | "back"; path: string | null; busy: boolean; onFile: (f: File) => void }) {
   const [over, setOver] = useState(false);
+  const [hint, setHint] = useState<string | null>(null);
   const id = useId();
   const paste = async () => {
     try {
@@ -151,17 +180,18 @@ function Side({ side, path, busy, onFile }: { side: "front" | "back"; path: stri
         const type = item.types.find((t) => t.startsWith("image/"));
         if (type) {
           const blob = await item.getType(type);
+          setHint(null);
           onFile(new File([blob], `${side}.${type.split("/")[1]}`, { type }));
           return;
         }
       }
-      alert("No image on the clipboard: right-click the scan, Copy image, then paste.");
+      setHint("no image on the clipboard: right-click the scan → Copy image");
     } catch {
-      alert("The browser didn't allow reading the clipboard; drop or choose the file instead.");
+      setHint("the browser blocked the clipboard: drop or choose the file");
     }
   };
   return (
-    <div className="space-y-1">
+    <div className="w-32 space-y-1">
       <label
         htmlFor={id}
         onDragOver={(e) => { e.preventDefault(); setOver(true); }}
@@ -169,10 +199,13 @@ function Side({ side, path, busy, onFile }: { side: "front" | "back"; path: stri
         onDrop={(e) => {
           e.preventDefault();
           setOver(false);
-          const f = e.dataTransfer.files[0];
-          if (f) onFile(f);
+          const f = [...e.dataTransfer.files].find((x) => x.type.startsWith("image/"));
+          if (f) { setHint(null); onFile(f); }
+          // dragged straight from another site: the browser often hands over
+          // only the image's address, which we can't fetch from here
+          else setHint("that was a link, not a file: save the image first, or right-click → Copy image → paste");
         }}
-        className={`block aspect-[5/7] rounded border cursor-pointer overflow-hidden ${
+        className={`block aspect-[5/7] rounded border-2 cursor-pointer overflow-hidden ${
           over ? "border-accent bg-accent/10" : path ? "border-border" : "border-dashed border-red-400/60 bg-red-500/5"
         }`}
         title={path ? `replace the ${side}` : `drop the grader's ${side} scan here`}
@@ -180,16 +213,17 @@ function Side({ side, path, busy, onFile }: { side: "front" | "back"; path: stri
         {busy ? (
           <div className="h-full flex items-center justify-center text-[10px] text-muted">uploading…</div>
         ) : path ? (
-          <img src={imageUrl(path)} alt={side} loading="lazy" className="w-full h-full object-contain bg-bg" />
+          <img src={imageUrl(path)} alt={side} loading="lazy" draggable={false} className="w-full h-full object-contain bg-bg" />
         ) : (
-          <div className="h-full flex flex-col items-center justify-center text-[10px] text-red-400 text-center px-1">
-            no {side}<span className="text-muted">drop scan</span>
+          <div className="h-full flex flex-col items-center justify-center gap-1 text-[11px] text-red-400 text-center px-2">
+            no {side}<span className="text-muted text-[10px]">drop the scan here or click</span>
           </div>
         )}
       </label>
       <input id={id} type="file" accept="image/jpeg,image/png,image/webp" className="hidden"
         onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); e.target.value = ""; }} />
       <button onClick={paste} className="w-full text-[10px] text-muted hover:text-accent">paste {side}</button>
+      {hint && <div className="text-[9px] text-yellow leading-tight">{hint}</div>}
     </div>
   );
 }
