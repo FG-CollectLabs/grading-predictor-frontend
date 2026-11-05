@@ -24,6 +24,7 @@ import type {
   StationStats,
   RefQueueItem,
   TemplateTask,
+  AIJob,
   SetSummary,
   SetCard,
   CardAnalytics,
@@ -177,6 +178,7 @@ export const api = {
     }
     return res.json() as Promise<{ copy_id: number; status: string }>;
   },
+  getAIJobs: () => get<{ jobs: AIJob[] }>("/v1/ai-jobs"),
   getTemplateQueue: (offset = 0, limit = 50) =>
     get<{ items: TemplateTask[]; total: number; as_of: string }>(`/v1/template-queue?limit=${limit}&offset=${offset}`),
   getReferenceQueue: (state: "missing" | "to_confirm", offset = 0) =>
