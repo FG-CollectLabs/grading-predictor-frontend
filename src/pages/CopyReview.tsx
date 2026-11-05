@@ -52,7 +52,7 @@ export default function CopyReview() {
   // photos step state
   const [front, setFront] = useState<number | null>(null);
   const [back, setBack] = useState<number | null>(null);
-  const [uploading, setUploading] = useState<"front" | "back" | null>(null);
+  const [uploading, setUploading] = useState<"front" | "back" | "catalog" | null>(null);
   // cert step state
   const [cert, setCert] = useState("");
   // the copy that already has the cert being saved, loaded to compare
@@ -252,6 +252,27 @@ export default function CopyReview() {
     [copyId, loadCopy],
   );
 
+  // A better catalog image for this card (shared by every copy of it):
+  // shrunk in the browser to 1600 px on the long side, JPEG 92%, so the
+  // stored image is a sensible size; copies the AI couldn't confirm against
+  // the old image are checked again.
+  const replaceCatalog = useCallback(
+    async (file: File) => {
+      setUploading("catalog");
+      setError(null);
+      try {
+        const res = await api.uploadReference(copy!.card_id, await shrinkImage(file, 1600));
+        await loadCopy();
+        setReevalMsg(`Catalog image replaced for every copy of this card${res.requeued ? `; ${res.requeued} copies go back through photo matching` : ""}.`);
+      } catch (e) {
+        setError(String(e));
+      } finally {
+        setUploading(null);
+      }
+    },
+    [copy, loadCopy],
+  );
+
   // keyboard: n = next copy (Enter is per step, on its main button)
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -385,7 +406,9 @@ export default function CopyReview() {
           {active === "card" && (
             <StepBody
               hint="Does the listing actually show this card (name, number, set, language)?"
-              left={<Figure label="catalog image" src={copy.card.image_url} />}
+              left={<Figure label="catalog image" src={largeCatalogImage(copy.card.image_url)} sub="shared by every copy of this card"
+                onUpload={replaceCatalog} uploading={uploading === "catalog"}
+                uploadText="drop, paste or choose a better image of this card (replaces it for every copy)" />}
               right={<Figure label="listing front" src={frontView.src} sub={frontView.sub} onUpload={(f) => upload("front", f)} uploading={uploading === "front"} />}
               actions={[
                 { label: "Yes, correct card", primary: true, onClick: () => record("card", "approved") },
@@ -825,8 +848,8 @@ function StepBody({ hint, left, right, extra, actions, busy }: {
   );
 }
 
-function Figure({ label, src, sub, tall, onUpload, uploading }: {
-  label: string; src: string | null; sub?: string; tall?: boolean;
+function Figure({ label, src, sub, tall, onUpload, uploading, uploadText }: {
+  label: string; src: string | null; sub?: string; tall?: boolean; uploadText?: string;
   /** drop / paste / choose a replacement (e.g. the grader's cert-page scan) */
   onUpload?: (f: File) => void; uploading?: boolean;
 }) {
@@ -844,7 +867,7 @@ function Figure({ label, src, sub, tall, onUpload, uploading }: {
       ) : (
         <div className="aspect-[5/7] max-h-[60vh] bg-bg border border-dashed border-border rounded flex items-center justify-center text-xs text-muted">no image</div>
       )}
-      {onUpload && <UploadLabel text={`drop, paste or choose the grader's scan / your own photo (${label})`} uploading={!!uploading} onUpload={onUpload} />}
+      {onUpload && <UploadLabel text={uploadText ?? `drop, paste or choose the grader's scan / your own photo (${label})`} uploading={!!uploading} onUpload={onUpload} />}
     </div>
   );
 }
@@ -979,4 +1002,22 @@ function PhotoPick({ photo, isFront, isBack, onFront, onBack, ai }: {
       </div>
     </div>
   );
+}
+
+/** PriceCharting catalog images are stored as 60 px thumbnails; the same path serves 1600 px. */
+function largeCatalogImage(u: string | null): string | null {
+  return u ? u.replace(/^(https:\/\/storage\.googleapis\.com\/images\.pricecharting\.com\/[^/]+)\/(60|240)\.jpg$/, "$1/1600.jpg") : u;
+}
+
+/** Downscale an image to maxSide px on its long side (JPEG 92%); smaller ones pass through. */
+async function shrinkImage(file: File, maxSide: number): Promise<File> {
+  const bmp = await createImageBitmap(file);
+  const s = Math.min(1, maxSide / Math.max(bmp.width, bmp.height));
+  if (s === 1 && file.type === "image/jpeg") return file;
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(bmp.width * s);
+  canvas.height = Math.round(bmp.height * s);
+  canvas.getContext("2d")!.drawImage(bmp, 0, 0, canvas.width, canvas.height);
+  const blob = await new Promise<Blob | null>((r) => canvas.toBlob(r, "image/jpeg", 0.92));
+  return blob ? new File([blob], "catalog.jpg", { type: "image/jpeg" }) : file;
 }
