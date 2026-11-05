@@ -1,4 +1,5 @@
 import AICostPanel from "../components/AICostPanel";
+import InfraPanel from "../components/InfraPanel";
 
 // Developer tab: how the grading predictor is put together. Static on
 // purpose: it documents the design; live numbers are on the Factory tab.
@@ -150,6 +151,7 @@ export default function Developer() {
 
       <Section title="Operating costs">
         <AICostPanel />
+        <div className="mt-3"><InfraPanel /></div>
         <div className="text-[10px] text-muted mt-2">
           Collected hourly by tools/ai_usage_collect.py on each agent machine (cron), from Claude Code's local session
           logs: token counts only. The pipeline itself uses no AI today; when it does, its calls report here too.

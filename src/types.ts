@@ -537,3 +537,16 @@ export interface TemplateTask {
 }
 
 export interface AIJob { task: string; purpose: string; what: string; copies: number; outcomes: Record<string, number> }
+
+// ── Hardware ─────────────────────────────────────────────────────────────────
+
+export interface InfraItem {
+  id: string; kind: "node" | "lxc" | "qemu" | "storage"; name: string; node: string; status: string;
+  cpu_used: number; cpu_max: number; cpu_avg_7d: number; cpu_peak_7d: number;
+  mem_used: number; mem_max: number; mem_peak_7d: number; disk_used: number; disk_max: number; disk_growth_per_day: number;
+}
+export interface InfraSummary {
+  as_of: string | null; items: InfraItem[]; totals: Record<string, number>; app: Record<string, number>;
+  rent: Record<string, number>; prices: { vcpu: number; gb_ram: number; gb_block: number; gb_bulk: number; source: string };
+  actual_usd_monthly: number | null; warnings: string[];
+}
