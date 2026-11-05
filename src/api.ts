@@ -33,6 +33,7 @@ import type {
   ReviewEvent,
   StepId,
   StepDecision,
+  InfraSummary,
 } from "./types";
 
 const BASE = import.meta.env.VITE_API_URL ?? "http://localhost:8084";
@@ -179,6 +180,7 @@ export const api = {
     return res.json() as Promise<{ copy_id: number; status: string }>;
   },
   getAIJobs: () => get<{ jobs: AIJob[] }>("/v1/ai-jobs"),
+  getInfra: () => get<InfraSummary>("/v1/infra"),
   getTemplateQueue: (offset = 0, limit = 50) =>
     get<{ items: TemplateTask[]; total: number; as_of: string }>(`/v1/template-queue?limit=${limit}&offset=${offset}`),
   getReferenceQueue: (state: "missing" | "to_confirm", offset = 0) =>

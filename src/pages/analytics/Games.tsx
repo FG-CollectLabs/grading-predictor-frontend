@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../../api";
 import AICostPanel from "../../components/AICostPanel";
+import InfraPanel from "../../components/InfraPanel";
 
 // Analytics home: pick a game (PokeData /tcgs style).
 export default function Games() {
@@ -17,6 +18,7 @@ export default function Games() {
   return (
     <div className="space-y-6">
       <AICostPanel compact />
+      <InfraPanel compact />
       <h1 className="text-lg font-semibold">Analytics</h1>
       <p className="text-xs text-muted max-w-3xl">
         What the factory has measured, per game, set and card, and the grade odds a raw card's centering implies.
