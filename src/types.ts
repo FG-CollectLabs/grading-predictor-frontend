@@ -564,3 +564,9 @@ export interface InfraCapacity {
   copies_that_fit: number | null; days_left_at_pace: number | null; days_left_keep_all: number | null;
   steady_bytes_per_day: number; days: InfraCapacityDay[];
 }
+
+export interface Setting {
+  key: string; group: string; label: string; help: string; kind: "int" | "float" | "bool"; unit?: string;
+  default: number | boolean; min: number; max: number;
+  value: number | boolean; is_set: boolean; updated_at: string | null; updated_by: string | null;
+}
