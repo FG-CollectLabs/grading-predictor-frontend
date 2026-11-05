@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
 import type { InfraItem, InfraSummary } from "../types";
+import CapacityPanel from "./CapacityPanel";
 
 // Hardware: what the homelab runs on, how full it is, and what renting the
 // same would cost (data: tools/infra_collect.py on Proxmox, every 15 min).
@@ -46,6 +47,7 @@ export default function InfraPanel({ compact = false }: { compact?: boolean }) {
             <div className="mt-2 text-xs text-yellow space-y-0.5">{d.warnings.map((w) => <div key={w}>⚠ {w}</div>)}</div>
           )}
           <Housekeeping d={d} />
+          {d.capacity && <CapacityPanel c={d.capacity} />}
           {!compact && <Details d={d} />}
         </>
       )}
