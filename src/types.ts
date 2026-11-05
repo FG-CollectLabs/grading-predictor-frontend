@@ -253,6 +253,7 @@ export interface CopyRow {
   reviewed_at: string | null;
   front_image: string | null;
   back_image: string | null;
+  card_image?: string | null;
   updated_at: string;
   front_centering: CenteringBrief | null;
   back_centering: CenteringBrief | null;

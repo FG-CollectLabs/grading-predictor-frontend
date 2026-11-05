@@ -15,6 +15,7 @@ export default function Factory() {
   const [stations, setStations] = useState<StationStats[] | null>(null);
   const [stationsAsOf, setStationsAsOf] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     const load = () =>
@@ -25,6 +26,22 @@ export default function Factory() {
     const t = setInterval(load, 60000);
     return () => clearInterval(t);
   }, []);
+
+  // count every station now (after a review session: "what's left?")
+  const refresh = async () => {
+    setRefreshing(true);
+    try {
+      const [st, s] = await Promise.all([api.getStations(true), api.getIngestStatus()]);
+      setStations(st.stations);
+      setStationsAsOf(st.as_of ?? null);
+      setStatus(s);
+      setError(null);
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   if (error) return <div className="text-red-400 py-12 text-center">{error}</div>;
   if (!stats || !status || !stations) return <div className="text-muted py-12 text-center">Loading the factory floor…</div>;
@@ -42,6 +59,11 @@ export default function Factory() {
           {n(needsYou)} station checks need you · <Link to="/factory/history" className="text-accent hover:underline">my review history →</Link>
           {asOf && <> · numbers as of {asOf} (refreshed every few minutes; links show exact lists)</>}
         </span>
+        <button onClick={refresh} disabled={refreshing}
+          className="ml-auto text-xs border border-border rounded px-3 py-1 hover:border-accent hover:text-accent disabled:opacity-50"
+          title="count every station now instead of using the last snapshot (takes a few seconds)">
+          {refreshing ? "counting…" : "↻ refresh counts"}
+        </button>
       </div>
       <p className="text-muted text-xs max-w-4xl">
         Every graded copy from eBay and Fanatics rides the belt through each machine. A machine answers on its own and says how

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { api, imageUrl } from "../api";
 import type { CenteringBrief, CopyList, CopyRow } from "../types";
@@ -70,6 +70,15 @@ export const FLAG_LABELS: Record<string, string> = {
   codes_disagree: "codes disagree",
 };
 
+// Bulk review: at these stations the list gets tick boxes and an action bar.
+// Each action records the same thing as deciding the copies one by one.
+const BULK: Record<string, { approve: string; reject?: string; hint: string }> = {
+  card: { approve: "✓ Correct card", reject: "✗ Wrong card", hint: "each tile shows the listing front next to the catalog image" },
+  grade: { approve: "✓ Grader & grade correct", reject: "✗ Not a genuine slab", hint: "check the label on each front" },
+  cert: { approve: "✓ Cert correct", hint: "" },
+  photos: { approve: "✓ Photos are right", hint: "front and back are the full slab" },
+};
+
 export default function Copies() {
   const [params, setParams] = useSearchParams();
   const [data, setData] = useState<CopyList | null>(null);
@@ -79,6 +88,52 @@ export default function Copies() {
   const [q, setQ] = useState(params.get("q") ?? "");
 
   const offset = Number(params.get("offset") ?? 0);
+  const station = params.get("station") ?? "";
+  const bulk = BULK[station];
+  const [tick, setTick] = useState(0);   // bump to load the list again
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const lastClicked = useRef<number | null>(null);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkMsg, setBulkMsg] = useState<string | null>(null);
+
+  useEffect(() => { setSelected(new Set()); lastClicked.current = null; }, [params]);
+
+  // click a tick box; shift-click ticks the whole range from the last one
+  const toggle = (id: number, shift: boolean) => {
+    const ids = data?.items.map((c) => c.id) ?? [];
+    setSelected((cur) => {
+      const next = new Set(cur);
+      const on = !cur.has(id);
+      if (shift && lastClicked.current !== null) {
+        const a = ids.indexOf(lastClicked.current), b = ids.indexOf(id);
+        if (a >= 0 && b >= 0) {
+          for (const x of ids.slice(Math.min(a, b), Math.max(a, b) + 1)) on ? next.add(x) : next.delete(x);
+          return next;
+        }
+      }
+      on ? next.add(id) : next.delete(id);
+      return next;
+    });
+    lastClicked.current = id;
+  };
+
+  const runBulk = async (action: "approve" | "reject" | "remove") => {
+    const ids = [...selected];
+    const what = (action === "approve" ? bulk.approve : action === "reject" ? bulk.reject : "Remove from the dataset") ?? "Reject";
+    if (!ids.length || !confirm(`${what.replace(/^[✓✗] /, "")}: ${ids.length} cop${ids.length === 1 ? "y" : "ies"}?`)) return;
+    setBulkBusy(true);
+    setBulkMsg(null);
+    try {
+      const r = await api.bulkReview({ station, action, ids });
+      setBulkMsg(`${what.replace(/^[✓✗] /, "")}: ${r.done} cop${r.done === 1 ? "y" : "ies"}${r.skipped ? ` (${r.skipped} skipped)` : ""}.`);
+      setSelected(new Set());
+      setTick((t) => t + 1);
+    } catch (e) {
+      setBulkMsg(String(e));
+    } finally {
+      setBulkBusy(false);
+    }
+  };
 
   useEffect(() => {
     const p = new URLSearchParams(params);
@@ -93,7 +148,7 @@ export default function Copies() {
       })
       .catch((e: unknown) => setError(String(e)))
       .finally(() => setLoading(false));
-  }, [params]);
+  }, [params, tick]);
 
   function set(key: string, value: string) {
     const p = new URLSearchParams(params);
@@ -185,6 +240,10 @@ export default function Copies() {
             {loading && " · loading…"}
           </span>
           <div className="flex gap-2">
+            <button onClick={() => setTick((t) => t + 1)} disabled={loading} title="load this list again (what's left)"
+              className="border border-border rounded px-2 py-1 disabled:opacity-30 hover:border-accent">
+              ↻ refresh
+            </button>
             <button disabled={offset === 0} onClick={() => page(-1)} className="border border-border rounded px-2 py-1 disabled:opacity-30 hover:border-accent">
               ← prev
             </button>
@@ -196,9 +255,34 @@ export default function Copies() {
       )}
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3">
-        {data?.items.map((c) => <CopyTile key={c.id} copy={c} query={listQuery} />)}
+        {data?.items.map((c) => (
+          <CopyTile key={c.id} copy={c} query={listQuery} catalog={station === "card"}
+            selected={bulk ? selected.has(c.id) : undefined} onToggle={(shift) => toggle(c.id, shift)} />
+        ))}
       </div>
       {data && data.items.length === 0 && !loading && <div className="text-muted text-center py-12">No copies match.</div>}
+
+      {bulk && data && data.items.length > 0 && (
+        <div className="sticky bottom-0 mt-4 bg-bg/95 border-t border-border py-3 flex flex-wrap items-center gap-3 text-xs">
+          <span className="font-semibold">{selected.size} selected</span>
+          <button className="text-muted hover:text-accent" onClick={() => setSelected(new Set(data.items.map((c) => c.id)))}>
+            select all {data.items.length} on this page
+          </button>
+          {selected.size > 0 && <button className="text-muted hover:text-accent" onClick={() => setSelected(new Set())}>clear</button>}
+          <span className="text-[10px] text-muted">shift-click ticks a range{bulk.hint ? ` · ${bulk.hint}` : ""}</span>
+          <div className="ml-auto flex gap-2">
+            <button disabled={!selected.size || bulkBusy} onClick={() => runBulk("approve")}
+              className="px-3 py-1.5 rounded bg-green/20 border border-green/50 text-green font-semibold disabled:opacity-40">{bulk.approve}</button>
+            {bulk.reject && (
+              <button disabled={!selected.size || bulkBusy} onClick={() => runBulk("reject")}
+                className="px-3 py-1.5 rounded border border-red-400/50 text-red-400 disabled:opacity-40">{bulk.reject}</button>
+            )}
+            <button disabled={!selected.size || bulkBusy} onClick={() => runBulk("remove")}
+              className="px-3 py-1.5 rounded border border-border text-muted hover:text-red-400 disabled:opacity-40">🗑 Remove from dataset</button>
+          </div>
+          {bulkMsg && <div className="w-full text-[11px] text-green">{bulkMsg}</div>}
+        </div>
+      )}
     </div>
   );
 }
@@ -264,15 +348,26 @@ export function StatusBadge({ copy }: { copy: Pick<CopyRow, "triage_status" | "n
   return <span className={`border rounded px-1.5 py-0.5 text-[10px] ${color[copy.triage_status]}`}>{text}</span>;
 }
 
-function CopyTile({ copy, query }: { copy: CopyRow; query: string }) {
+function CopyTile({ copy, query, catalog, selected, onToggle }: {
+  copy: CopyRow; query: string; catalog?: boolean; selected?: boolean; onToggle?: (shift: boolean) => void;
+}) {
   return (
     <Link
       to={`/copies/${copy.id}${query}`}
-      className="bg-surface border border-border rounded-md p-2 hover:border-accent/60 transition-colors flex flex-col gap-2"
+      className={`relative bg-surface border rounded-md p-2 hover:border-accent/60 transition-colors flex flex-col gap-2 ${
+        selected ? "border-accent ring-1 ring-accent" : "border-border"}`}
     >
+      {selected !== undefined && (
+        <button
+          onClick={(e) => { e.preventDefault(); e.stopPropagation(); onToggle?.(e.shiftKey); }}
+          className={`absolute top-1 left-1 z-10 w-6 h-6 rounded border-2 flex items-center justify-center text-sm font-bold ${
+            selected ? "bg-accent border-accent text-bg" : "bg-bg/80 border-border text-transparent hover:border-accent"}`}
+          title="select (shift-click: a range)"
+        >✓</button>
+      )}
       <div className="grid grid-cols-2 gap-1">
         <Thumb path={copy.front_image} label="front" />
-        <Thumb path={copy.back_image} label="back" />
+        {catalog ? <CatalogThumb url={copy.card_image ?? null} /> : <Thumb path={copy.back_image} label="back" />}
       </div>
       <div className="min-w-0">
         <div className="text-xs font-semibold truncate" title={copy.card_name}>{copy.card_name}</div>
@@ -314,6 +409,26 @@ function Thumb({ path, label }: { path: string | null; label: string }) {
     );
   }
   return <img src={imageUrl(path)} alt={label} loading="lazy" className="aspect-[5/7] w-full object-contain bg-bg rounded" />;
+}
+
+/** The card's catalog image (PriceCharting thumbnails served at 240 px for the list). */
+function CatalogThumb({ url }: { url: string | null }) {
+  if (!url) {
+    return (
+      <div className="aspect-[5/7] bg-bg border border-dashed border-border rounded flex items-center justify-center text-[9px] text-muted">
+        no catalog image
+      </div>
+    );
+  }
+  const src = url
+    .replace(/^(https:\/\/storage\.googleapis\.com\/images\.pricecharting\.com\/[^/]+)\/(60|1600)\.jpg$/, "$1/240.jpg")
+    .replace(/^(https:\/\/assets\.tcgdex\.net\/.+)\/high\.webp$/, "$1/low.webp");
+  return (
+    <div className="relative">
+      <img src={src.startsWith("http") ? src : imageUrl(src)} alt="catalog" loading="lazy" className="aspect-[5/7] w-full object-contain bg-bg rounded" />
+      <span className="absolute bottom-0 left-0 right-0 text-center text-[8px] bg-bg/70 text-muted">catalog</span>
+    </div>
+  );
 }
 
 function CenteringChip({ label, c }: { label: string; c: CenteringBrief | null }) {
