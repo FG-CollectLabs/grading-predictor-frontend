@@ -100,13 +100,23 @@ function Row({ c: initial, onDone }: { c: CopyRow; onDone: () => void }) {
   const [err, setErr] = useState<string | null>(null);
   const lookup = c.cert_number ? certLookupUrl(c.grader, c.cert_number) : null;
 
-  // a file, or the address of a grader's scan (dragged from the cert page)
-  const upload = async (side: "front" | "back", file: File | string) => {
+  // a file, the address of a grader's scan, or both (a drop from the cert
+  // page carries both: the address gets the full-size scan, the file is the
+  // fallback when the API can't fetch it)
+  const upload = async (side: "front" | "back", src: Dropped) => {
     setBusy(side);
     setErr(null);
     try {
-      if (typeof file === "string") await api.uploadCertImageFromUrl(c.id, side, file);
-      else await api.uploadCertImage(c.id, side, file);
+      if (typeof src === "string") await api.uploadCertImageFromUrl(c.id, side, src);
+      else if (src instanceof File) await api.uploadCertImage(c.id, side, src);
+      else {
+        try {
+          await api.uploadCertImageFromUrl(c.id, side, src.url);
+        } catch (e) {
+          if (/is for cert/.test(String(e))) throw e; // the scan of another slab: don't store it at all
+          await api.uploadCertImage(c.id, side, src.file);
+        }
+      }
       const d = await api.getCopy(c.id);
       const next = { ...c, front_image: d.front_image, back_image: d.back_image };
       setC(next);
@@ -175,6 +185,10 @@ function Row({ c: initial, onDone }: { c: CopyRow; onDone: () => void }) {
   );
 }
 
+type Dropped = File | string | { url: string; file: File };
+
+const PSA_SCAN = /^https:\/\/d1htnxwo4o0jhw\.cloudfront\.net\/cert\//i;
+
 // the image address in a drop from another page (Chrome hands over the URL,
 // not the file, when an image is dragged from a website)
 function droppedUrl(dt: DataTransfer): string | null {
@@ -186,7 +200,7 @@ function droppedUrl(dt: DataTransfer): string | null {
   return /^https:\/\//.test(text) ? text : null;
 }
 
-function Side({ side, path, busy, onFile }: { side: "front" | "back"; path: string | null; busy: boolean; onFile: (f: File | string) => void }) {
+function Side({ side, path, busy, onFile }: { side: "front" | "back"; path: string | null; busy: boolean; onFile: (f: Dropped) => void }) {
   const [over, setOver] = useState(false);
   const [hint, setHint] = useState<string | null>(null);
   const id = useId();
@@ -217,11 +231,15 @@ function Side({ side, path, busy, onFile }: { side: "front" | "back"; path: stri
         onDrop={(e) => {
           e.preventDefault();
           setOver(false);
-          const f = [...e.dataTransfer.files].find((x) => x.type.startsWith("image/"));
-          const u = f ? null : droppedUrl(e.dataTransfer);
-          if (f) { setHint(null); onFile(f); }
-          // dragged straight from the cert page: the API fetches the address
-          else if (u) { setHint(null); onFile(u); }
+          // Chrome often gives an image dragged out of a web page no type,
+          // so take any file; the API checks the bytes are an image
+          const f = [...e.dataTransfer.files].find((x) => !x.type || x.type.startsWith("image/"));
+          const u = droppedUrl(e.dataTransfer);
+          setHint(null);
+          // from PSA's cert page: fetch the full-size scan, the file as fallback
+          if (u && PSA_SCAN.test(u)) onFile(f ? { url: u, file: f } : u);
+          else if (f) onFile(f);
+          else if (u) onFile(u);
           else setHint("nothing usable in that drop: save the image and drop the file, or right-click → Copy image → paste");
         }}
         className={`block aspect-[5/7] rounded border-2 cursor-pointer overflow-hidden ${
