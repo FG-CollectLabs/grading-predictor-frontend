@@ -35,8 +35,8 @@ export default function Scans() {
         <h1 className="text-lg font-semibold mt-1">Scans to pull</h1>
         <p className="text-muted text-xs mt-1 max-w-3xl">
           No listing photo shows the full slab on these sides. Open the grader's cert page, save their front / back scan, then
-          drop it on the missing side on the right. Dragging PSA's scan straight from the cert page works (the full-size
-          scan is fetched, not the small one the page shows); you can also click the box to choose a file, or copy the image
+          drop it on the missing side on the right. Dragging the scan straight from PSA's or CGC's cert page works (for PSA the
+          full-size scan is fetched, not the small one the page shows); you can also click the box to choose a file, or copy the image
           (or its address) and use "paste".
           When both sides are stored the copy moves on: the AI checks card, grade and cert on the new front, then centering
           measures it. No scans on the cert page either? Remove the copy. Copies with no cert number are kept when the
@@ -187,17 +187,38 @@ function Row({ c: initial, onDone }: { c: CopyRow; onDone: () => void }) {
 
 type Dropped = File | string | { url: string; file: File };
 
-const PSA_SCAN = /^https:\/\/d1htnxwo4o0jhw\.cloudfront\.net\/cert\//i;
+// the graders' scan hosts: a drop from there uploads by address (the API
+// fetches the full-size scan), with the dropped file as the fallback
+const SCAN_HOST = /^https:\/\/(d1htnxwo4o0jhw\.cloudfront\.net\/cert\/|ccg-imaging-cgc-tradingcards-production\.s3\.amazonaws\.com\/)/i;
 
-// the image address in a drop from another page (Chrome hands over the URL,
-// not the file, when an image is dragged from a website)
+// the image address in a drop from another page or window. Chrome puts it in
+// different places depending on where the image was dragged from.
 function droppedUrl(dt: DataTransfer): string | null {
-  const uri = dt.getData("text/uri-list").split("\n").map((s) => s.trim()).find((s) => s && !s.startsWith("#"));
-  if (uri) return uri;
-  const src = /<img[^>]+src="([^"]+)"/i.exec(dt.getData("text/html"))?.[1];
-  if (src) return src.replace(/&amp;/g, "&");
-  const text = dt.getData("text/plain").trim();
-  return /^https:\/\//.test(text) ? text : null;
+  const isUrl = (s: string) => /^https?:\/\//i.test(s);
+  const uri = dt.getData("text/uri-list").split(/\r?\n/).map((s) => s.trim()).find((s) => s && !s.startsWith("#"));
+  if (uri && isUrl(uri)) return uri;
+  // Chrome's "DownloadURL": mime:filename:url
+  const dl = /^[^:]+:[^:]*:(https?:\/\/.+)$/.exec(dt.getData("DownloadURL").trim())?.[1];
+  if (dl) return dl;
+  const src = /<img[^>]+src\s*=\s*["']([^"']+)["']/i.exec(dt.getData("text/html"))?.[1];
+  if (src && isUrl(src)) return src.replace(/&amp;/g, "&");
+  const text = dt.getData("text/plain").trim() || dt.getData("URL").trim();
+  return isUrl(text) ? text : null;
+}
+
+// any file in the drop: Chrome may give an image dragged out of a web page no
+// type or a generic one; the API checks the bytes are an image
+function droppedFile(dt: DataTransfer): File | null {
+  const fromItems = [...dt.items].filter((i) => i.kind === "file").map((i) => i.getAsFile()).filter((f): f is File => !!f);
+  const all = [...dt.files, ...fromItems];
+  return all.find((f) => f.type.startsWith("image/")) ?? all.find((f) => !f.type.startsWith("text/")) ?? null;
+}
+
+// what the browser actually handed over, for the hint when nothing was usable
+function dropSummary(dt: DataTransfer): string {
+  const types = [...dt.types];
+  const files = [...dt.files].map((f) => `${f.name || "?"} (${f.type || "no type"}, ${f.size} B)`);
+  return `types [${types.join(", ") || "none"}]${files.length ? ` files ${files.join("; ")}` : ""}`;
 }
 
 function Side({ side, path, busy, onFile }: { side: "front" | "back"; path: string | null; busy: boolean; onFile: (f: Dropped) => void }) {
@@ -231,16 +252,15 @@ function Side({ side, path, busy, onFile }: { side: "front" | "back"; path: stri
         onDrop={(e) => {
           e.preventDefault();
           setOver(false);
-          // Chrome often gives an image dragged out of a web page no type,
-          // so take any file; the API checks the bytes are an image
-          const f = [...e.dataTransfer.files].find((x) => !x.type || x.type.startsWith("image/"));
+          // read everything now: the drop's data is gone after this handler
+          const f = droppedFile(e.dataTransfer);
           const u = droppedUrl(e.dataTransfer);
+          console.info("scan drop", side, dropSummary(e.dataTransfer), u);
           setHint(null);
-          // from PSA's cert page: fetch the full-size scan, the file as fallback
-          if (u && PSA_SCAN.test(u)) onFile(f ? { url: u, file: f } : u);
+          if (u && SCAN_HOST.test(u)) onFile(f ? { url: u, file: f } : u);
           else if (f) onFile(f);
           else if (u) onFile(u);
-          else setHint("nothing usable in that drop: save the image and drop the file, or right-click → Copy image → paste");
+          else setHint(`nothing usable in that drop (${dropSummary(e.dataTransfer)}): click the box to choose the saved file, or right-click → Copy image → paste`);
         }}
         className={`block aspect-[5/7] rounded border-2 cursor-pointer overflow-hidden ${
           over ? "border-accent bg-accent/10" : path ? "border-border" : "border-dashed border-red-400/60 bg-red-500/5"
