@@ -39,13 +39,14 @@ export default function Scans() {
           scan is fetched, not the small one the page shows); you can also click the box to choose a file, or copy the image
           (or its address) and use "paste".
           When both sides are stored the copy moves on: the AI checks card, grade and cert on the new front, then centering
-          measures it. No scans on the cert page either? Remove the copy.
+          measures it. No scans on the cert page either? Remove the copy. Copies with no cert number are kept when the
+          listing has both a full front and back, and removed otherwise (their scans can't be looked up).
         </p>
         {done > 0 && <div className="text-green text-xs mt-1">{done} done this session.</div>}
       </div>
 
       <Section cert="present" title="With a cert number" empty="Nothing to pull." onDone={bump} />
-      <Section cert="missing" title="No cert number (the AI couldn't read one): check the listing, or remove"
+      <Section cert="missing" title="No cert number: removed from the dataset automatically within a few minutes"
         empty="None." onDone={bump} />
     </div>
   );
