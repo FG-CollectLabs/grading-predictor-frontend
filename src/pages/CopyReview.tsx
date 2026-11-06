@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { api, imageUrl } from "../api";
-import type { CenteringMeasurement, CopyDetail, CopyPhoto, ReviewSteps, StepDecision, StepId } from "../types";
+import type { CenteringMeasurement, CopyDetail, CopyList, CopyPhoto, ReviewSteps, StepDecision, StepId } from "../types";
 import CenteringEditor from "../components/CenteringEditor";
 import { FLAG_LABELS, StatusBadge, gradeText } from "./Copies";
 
@@ -137,10 +137,22 @@ export default function CopyReview() {
   }, [steps, focus, focusStation]);
   const goNextRef = useRef<(() => Promise<void>) | null>(null);
 
-  const goNext = useCallback(async (skipThis = false) => {
+  // the list the next copy comes from, fetched as soon as this copy opens so
+  // "next" doesn't wait on it after the save
+  const listParams = useCallback(() => {
     const p = new URLSearchParams(search);
     p.set("limit", "60");
     p.delete("offset");
+    return p;
+  }, [search]);
+  const prefetched = useRef<Promise<CopyList | null> | null>(null);
+  useEffect(() => {
+    const p = listParams();
+    prefetched.current = focusStation && p.get("queue") !== "templates" ? api.listCopies(p).catch(() => null) : null;
+  }, [listParams, copyId, focusStation]);
+
+  const goNext = useCallback(async (skipThis = false) => {
+    const p = listParams();
     // copies skipped this session aren't offered again (otherwise two skipped
     // copies at the top of a queue bounce back and forth)
     const skipped = new Set<number>(JSON.parse(sessionStorage.getItem("skippedCopies") ?? "[]"));
@@ -162,14 +174,20 @@ export default function CopyReview() {
       }
       return;
     }
+    // copies finished this session: the prefetched list may predate them
+    const done = new Set<number>(JSON.parse(sessionStorage.getItem("doneCopies") ?? "[]"));
+    if (!skipThis) {
+      done.add(copyId);
+      sessionStorage.setItem("doneCopies", JSON.stringify([...done].slice(-500)));
+    }
     try {
-      const list = await api.listCopies(p);
-      const next = list.items.find((c) => c.id !== copyId && !skipped.has(c.id));
+      const list = (await prefetched.current) ?? (await api.listCopies(p));
+      const next = list.items.find((c) => c.id !== copyId && !skipped.has(c.id) && !done.has(c.id));
       navigate(next ? `/copies/${next.id}${search}` : `/copies${search}`);
     } catch {
       navigate(`/copies${search}`);
     }
-  }, [search, copyId, navigate]);
+  }, [listParams, copyId, navigate]);
   goNextRef.current = () => goNext();
 
   const complete = useCallback(async () => {
