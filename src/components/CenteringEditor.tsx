@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, imageUrl } from "../api";
 import type { CenteringMeasurement, CornerGrades, InnerMM, Quad } from "../types";
 import CornerZoom from "./CornerZoom";
+import { fitCorners, type CornerFitJS } from "../lib/corners";
 
 // Review / adjust one photo's centering measurement.
 //
@@ -151,6 +152,32 @@ const SIDES: Side[] = ["left", "right", "top", "bottom"];
 
 // ── component ────────────────────────────────────────────────────────────────
 
+function inv3(m: number[]): number[] {
+  const [a, b, c, d, e, f, g, h, i] = m;
+  const A = e * i - f * h, B = -(d * i - f * g), C = d * h - e * g;
+  const det = a * A + b * B + c * C;
+  return [A / det, -(b * i - c * h) / det, (b * f - c * e) / det,
+    B / det, (a * i - c * g) / det, -(a * f - c * d) / det,
+    C / det, -(a * h - b * g) / det, (a * e - b * d) / det];
+}
+const apply3 = (m: number[], x: number, y: number): [number, number] => {
+  const z = m[6] * x + m[7] * y + m[8];
+  return [(m[0] * x + m[1] * y + m[2]) / z, (m[3] * x + m[4] * y + m[5]) / z];
+};
+
+/** The inner lines where they are on the card (the printed border doesn't
+ * move when the cut is corrected): inner mm re-measured from the new outline. */
+function anchorInner(oldQ: Quad, newQ: Quad, inner: InnerMM): InnerMM {
+  const Ho = homography(CARD_W, CARD_H, oldQ), Hn = inv3(homography(CARD_W, CARD_H, newQ));
+  const via = (x: number, y: number) => { const [px, py] = apply3(Ho, x, y); return apply3(Hn, px, py); };
+  const L = (via(inner.left, 25)[0] + via(inner.left, 63)[0]) / 2;
+  const R = CARD_W - (via(CARD_W - inner.right, 25)[0] + via(CARD_W - inner.right, 63)[0]) / 2;
+  const T = (via(18, inner.top)[1] + via(45, inner.top)[1]) / 2;
+  const B = CARD_H - (via(18, CARD_H - inner.bottom)[1] + via(45, CARD_H - inner.bottom)[1]) / 2;
+  const ok = (v: number, was: number) => (Number.isFinite(v) && v > 0.05 && v < 20 ? v : was);
+  return { left: ok(L, inner.left), right: ok(R, inner.right), top: ok(T, inner.top), bottom: ok(B, inner.bottom) };
+}
+
 export type CenteringStage = "outer" | "inner" | "both";
 export type StageDecision = "approved" | "fixed" | "rejected";
 
@@ -249,6 +276,25 @@ export default function CenteringEditor({
     return measurements.filter((m) => m.placed_by === "auto" && m.corners && m.image_id === current?.image_id)
       .sort((a, b) => b.id - a.id)[0]?.corners;
   }, [measurements, current]);
+
+  // moving the outline keeps the inner lines on the printed border
+  const moveQuad = useCallback((q: Quad) => {
+    if (quad && inner) setInner(anchorInner(quad, q, inner));
+    setQuad(q);
+  }, [quad, inner]);
+
+  // the corner check (browser port of the engine's) on the current outline,
+  // re-run when a corner is let go
+  const [liveCorners, setLiveCorners] = useState<CornerFitJS[] | null>(null);
+  useEffect(() => {
+    if (!src || !quad || dragCorner !== null) return;
+    const t = setTimeout(() => {
+      try { setLiveCorners(fitCorners(src, quad)); } catch { setLiveCorners(null); }
+    }, 150);
+    return () => clearTimeout(t);
+  }, [src, quad, dragCorner]);
+
+  const [confirming, setConfirming] = useState(false);
 
   const photoFit = src ? Math.min(PHOTO_W / src.width, PHOTO_H / src.height) : 1;
   const rectFit = Math.min(RECT_W / CARD_W, RECT_H / CARD_H); // canvas px per mm at zoom 1
@@ -383,7 +429,7 @@ export default function CenteringEditor({
       const [x, y] = toContent(photoFit, pv, PHOTO_W, PHOTO_H, sx, sy);
       const q = quad.map((p) => [p[0], p[1]]) as Quad;
       q[dragCorner] = [Math.round(x * 4) / 4, Math.round(y * 4) / 4];
-      setQuad(q);
+      moveQuad(q);
     } else if (pan.current?.which === "photo") {
       const k = viewK(photoFit, pan.current.v);
       setPv({ ...pan.current.v, cx: pan.current.v.cx - (sx - pan.current.sx) / k, cy: pan.current.v.cy - (sy - pan.current.sy) / k });
@@ -402,7 +448,7 @@ export default function CenteringEditor({
     if (selCorner === null || !quad) return;
     const q = quad.map((p) => [p[0], p[1]]) as Quad;
     q[selCorner] = [q[selCorner][0] + dx, q[selCorner][1] + dy];
-    setQuad(q);
+    moveQuad(q);
   };
   const focusCorner = (i: number) => {
     if (!quad) return;
@@ -580,7 +626,7 @@ export default function CenteringEditor({
             drag a corner onto the cut edge · wheel = zoom, drag empty space = pan · Tab / Shift+Tab = next / previous corner · arrows = 1 px (Shift 10)
           </div>
           {stage !== "inner" && quad && src && (
-            <CornerZoom bitmap={bitmapRef.current} quad={quad} setQuad={setQuad} engine={engineCorners}
+            <CornerZoom bitmap={bitmapRef.current} quad={quad} setQuad={moveQuad} engine={liveCorners ?? engineCorners}
               grades={grades} setGrades={setGrades} ppmm={srcPpmm} />
           )}
         </div>
@@ -654,11 +700,32 @@ export default function CenteringEditor({
           <div className="flex flex-col gap-1.5">
             {stage === "outer" ? (
               <button
-                disabled={!current || !quad}
-                onClick={() => onStageDone?.("outer", outerChanged ? "fixed" : "approved", { quad })}
+                disabled={!current || !quad || confirming}
+                onClick={async () => {
+                  if (!outerChanged || !current) { onStageDone?.("outer", "approved", { quad }); return; }
+                  // confirmed outline: the engine re-measures the inner border and corners on it
+                  setConfirming(true);
+                  setMsg("Re-measuring the inner border and corners on your outline…");
+                  try {
+                    const res = await api.postCentering(copyId, { action: "confirm_outer", base_id: current.id, outer_quad: quad!, inner_mm: inner ?? undefined, tags, note });
+                    let ms = res.measurements;
+                    for (let i = 0; i < 30 && !ms.some((m) => m.supersedes === res.id); i++) {
+                      await new Promise((r) => setTimeout(r, 2000));
+                      ms = (await api.getCentering(copyId)).measurements;
+                    }
+                    const got = ms.some((m) => m.supersedes === res.id);
+                    onSaved(ms);
+                    setMsg(got ? "Inner border and corners re-measured on your outline." : "The engine is busy: inner lines kept where they were on the card; it will re-measure shortly.");
+                    onStageDone?.("outer", "fixed", { quad, confirmed_measurement: res.id, engine_remeasured: got });
+                  } catch (e) {
+                    setMsg(String(e));
+                  } finally {
+                    setConfirming(false);
+                  }
+                }}
                 className="bg-accent text-bg font-semibold px-3 py-1.5 rounded text-xs hover:bg-accent/90 disabled:opacity-40"
               >
-                {outerChanged ? "Outer edge adjusted → inner border" : "Outer edge is right → inner border"}
+                {confirming ? "Re-measuring on your outline…" : outerChanged ? "Confirm outer edge → re-measure inner border" : "Outer edge is right → inner border"}
               </button>
             ) : (
               <button

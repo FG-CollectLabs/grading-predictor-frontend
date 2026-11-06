@@ -6,7 +6,8 @@ import type { CornerLook, CornerGrades, CornerName, EngineCorner, Quad } from ".
 // Each tile shows ~8 mm around one corner of the quad, the quad's two edges,
 // and a dashed 3 mm quarter circle touching both: on a well-placed corner it
 // hugs the card's rounded cut. Click (or drag) in a tile to put the corner
-// exactly there. The engine's own corner fit (v0.7) shows as a cyan ring.
+// exactly there. The corner check (re-run on the current outline whenever a
+// corner is let go) shows where it finds the cut as a cyan ring.
 //
 // Under each tile, corner grading: whitening (none / white specks / heavy)
 // and shape (a clean quarter circle or off: chipped, flat, uneven cut).
@@ -30,7 +31,7 @@ export default function CornerZoom({
   bitmap: HTMLCanvasElement | null;
   quad: Quad;
   setQuad: (q: Quad) => void;
-  engine: EngineCorner[] | undefined;
+  engine: Pick<EngineCorner, "name" | "found" | "point" | "radius_mm" | "roundness_rms_mm" | "whitening">[] | undefined;
   grades: CornerGrades;
   setGrades: (g: CornerGrades) => void;
   ppmm: number; // photo px per mm
@@ -38,7 +39,7 @@ export default function CornerZoom({
   return (
     <div className="mt-2">
       <div className="text-[10px] text-muted mb-1">
-        corner check: click a tile to put the corner exactly there · dashed arc = a 3 mm card corner touching both edges (it should hug the cut) · cyan ring = the engine's corner fit
+        corner check: click a tile to put the corner exactly there · dashed arc = a 3 mm card corner touching both edges (it should hug the cut) · cyan ring = where the corner check finds the cut from this outline (re-runs as you adjust)
       </div>
       <div className="grid grid-cols-2 gap-2" style={{ width: 2 * TILE + 8 }}>
         {CORNERS.map((c, i) => (
@@ -53,7 +54,7 @@ export default function CornerZoom({
 
 function Tile({ i, label, bitmap, quad, setQuad, ppmm, engine, grade, setGrade }: {
   i: number; label: string; bitmap: HTMLCanvasElement | null; quad: Quad; setQuad: (q: Quad) => void; ppmm: number;
-  engine?: EngineCorner; grade: CornerLook; setGrade: (g: CornerLook) => void;
+  engine?: Pick<EngineCorner, "name" | "found" | "point" | "radius_mm" | "roundness_rms_mm" | "whitening">; grade: CornerLook; setGrade: (g: CornerLook) => void;
 }) {
   const ref = useRef<HTMLCanvasElement>(null);
   const drag = useRef(false);
@@ -143,9 +144,9 @@ function Tile({ i, label, bitmap, quad, setQuad, ppmm, engine, grade, setGrade }
       <div className="flex items-center justify-between text-[9px] text-muted">
         <span>{label}</span>
         {engine?.found && engine.point && (
-          <button className="text-[9px] text-accent hover:underline" title="put the corner where the engine found the cut"
+          <button className="text-[9px] text-accent hover:underline" title="put the corner where the corner check finds the cut, looking from the current outline"
             onClick={() => { const q = quad.map((x) => [x[0], x[1]]) as Quad; q[i] = engine.point as P; setQuad(q); }}>
-            use engine's
+            snap to cut
           </button>
         )}
       </div>
