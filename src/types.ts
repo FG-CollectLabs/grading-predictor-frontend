@@ -341,7 +341,17 @@ export interface CenteringMeasurement {
   tags: string[];
   note: string | null;
   created_at: string;
+  corners?: EngineCorner[];
+  corner_grades?: CornerGrades;
 }
+export type CornerName = "top_left" | "top_right" | "bottom_right" | "bottom_left";
+export interface EngineCorner {
+  name: CornerName; found: boolean; point: [number, number] | null; shift_mm: number; arc: number; quad_arc: number;
+  radius_mm: number | null; arc_radius_mm?: number | null; roundness_rms_mm: number | null;
+  whitening: number | null; white_spots: number | null; flags: string[];
+}
+export interface CornerLook { whitening?: "none" | "specks" | "heavy"; shape?: "round" | "off" }
+export type CornerGrades = Partial<Record<CornerName, CornerLook>>;
 
 export interface CenteringBrief {
   lr: number | null;
@@ -358,6 +368,7 @@ export interface CenteringAction {
   inner_mm?: InnerMM;
   tags: string[];
   note: string;
+  corner_grades?: CornerGrades;
 }
 
 // ── Factory / ingest status ──────────────────────────────────────────────────
