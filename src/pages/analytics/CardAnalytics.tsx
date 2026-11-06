@@ -174,10 +174,10 @@ function PredictionView({ p, onNew }: { p: Prediction; onNew: () => void }) {
                 <div className="h-full bg-accent" style={{ width: `${Math.round(o.p * 100)}%` }} />
               </div>
               <span className="w-12 font-mono text-right">{Math.round(o.p * 100)}%</span>
-              <span className="text-[10px] text-muted">prior {Math.round(o.prior * 100)}% · {o.copies} comparables (eff. {o.n_eff})</span>
+              <span className="text-[10px] text-muted">start {Math.round(o.prior * 100)}% · {o.in_bucket ?? 0} of {o.copies} measured copies at this centering</span>
             </div>
           ))}
-          <div className="text-[10px] text-muted">prior: {g.prior_source}{g.note ? ` · ${g.note}` : ""}</div>
+          <div className="text-[10px] text-muted">start: {g.prior_source}{g.note ? ` · ${g.note}` : ""}</div>
         </div>
       ))}
       {p.comparables && (

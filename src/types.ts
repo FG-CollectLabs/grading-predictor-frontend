@@ -521,14 +521,31 @@ export interface CardAnalytics {
 export interface PredictSide {
   lr: number | null; tb: number | null; err_pp: number; status: string; validated: boolean; flags: string[]; measurement_id: number;
 }
-export interface GradeOutcome { grade: string; p: number; prior: number; n_eff: number; copies: number }
+export interface GradeOutcome { grade: string; p: number; prior: number; n_eff?: number; copies: number; in_bucket?: number }
 export interface GraderPrediction {
-  grader: string; outcomes: GradeOutcome[]; prior_source: string; centering_cap?: string; note?: string;
+  grader: string; model?: string; outcomes: GradeOutcome[]; prior_source: string; centering_cap?: string; note?: string;
 }
+export type OffCenter = { front_lr: number; front_tb: number; back_lr: number; back_tb: number };
+export interface CenteringBacktest {
+  n: number; folds: number; auc_top: number; log_loss: number; baseline_log_loss: number;
+  reliability: { predicted: number; actual: number; n: number }[]; explanation: string;
+}
+export interface CenteringAnalytics {
+  grader: string; status: "ready" | "too_few"; note?: string; as_of: string; graders: Record<string, number>;
+  filters: { language: string; era: string; set_code: string };
+  classes?: string[]; counts?: Record<string, number>; n?: number; validated?: number;
+  listing_mix?: Record<string, number>; median_off_center?: OffCenter;
+  effects?: Record<keyof OffCenter, { per_point_before_knee: number; per_point_past_knee: number }>;
+  grid?: { x: string; y: string; max: number; back_off_center: { lr: number; tb: number };
+    cells: { p: number[]; observed: Record<string, number> }[][] };
+  curves?: Record<keyof OffCenter, number[][]>;
+  backtest?: CenteringBacktest | null; notes?: string[];
+}
+export interface CenteringOdds { off_center: OffCenter; predictions: GraderPrediction[] | null; caveats: string[] }
 export interface Prediction {
   copy_id: number; card_id: number; status: "measuring" | "ready" | "unmeasurable";
   centering: Partial<Record<"front" | "back", PredictSide>>;
-  worse_side?: { front: number; back: number };
+  worse_side?: { front: number; back: number }; off_center?: OffCenter;
   predictions?: GraderPrediction[]; comparables?: Record<string, number>; caveats: string[];
 }
 

@@ -17,13 +17,14 @@ import SetCards from "./pages/analytics/SetCards";
 import CardAnalytics from "./pages/analytics/CardAnalytics";
 import Settings from "./pages/Settings";
 import Developer from "./pages/Developer";
+import GraderAnalytics from "./pages/GraderAnalytics";
 
 // Tabs: Analytics (cards and their copies), Pre-grading factory (the pipeline
-// and its review queues), Grader analytics (later), Developer (architecture).
+// and its review queues), Grader analytics (centering vs grade odds), Developer (architecture).
 const TABS: { label: string; to: string; match: (p: string) => boolean; soon?: boolean }[] = [
   { label: "Analytics", to: "/", match: (p) => p === "/" || p.startsWith("/games") || p.startsWith("/sets") || p.startsWith("/cards") || p.startsWith("/certs") || p.startsWith("/intake") },
   { label: "Pre-grading factory", to: "/factory", match: (p) => p.startsWith("/factory") || p.startsWith("/copies") },
-  { label: "Grader analytics", to: "/", match: () => false, soon: true },
+  { label: "Grader analytics", to: "/grader-analytics", match: (p) => p.startsWith("/grader-analytics") },
   { label: "Developer", to: "/developer", match: (p) => p.startsWith("/developer") },
   { label: "Settings", to: "/settings", match: (p) => p.startsWith("/settings") },
 ];
@@ -100,6 +101,7 @@ export default function App() {
             <Route path="/factory/scans" element={<Scans />} />
             <Route path="/copies" element={<Copies />} />
             <Route path="/copies/:id" element={<CopyReview />} />
+            <Route path="/grader-analytics" element={<GraderAnalytics />} />
             <Route path="/developer" element={<Developer />} />
             <Route path="/settings" element={<Settings />} />
           </Routes>
