@@ -233,6 +233,7 @@ function CardSection({ v, grader, classes }: { v: CardView; grader: string; clas
             {v.measured} copies measured on both sides
             {v.psa_gem_rate && <> · PSA population gem rate <span className="text-[#e6edf3] font-mono">{v.psa_gem_rate.pct}%</span> of {v.psa_gem_rate.pop_total.toLocaleString()} graded (GemRate)</>}
             <Link to={`/cards/${v.card.id}`} className="text-accent hover:underline ml-2">card page</Link>
+            <FocusButton cardId={v.card.id} />
           </div>
           <div className="grid md:grid-cols-2 gap-x-6 gap-y-2">
             {graders.map(([g, m]) => {
@@ -577,5 +578,45 @@ function ReliabilityTable({ bt, top }: { bt: NonNullable<CenteringAnalytics["bac
         </tbody>
       </table>
     </div>
+  );
+}
+
+// Focus card (Settings: focus.card_ids): every copy of the card gets photos,
+// triage and centering ahead of everything else.
+function FocusButton({ cardId }: { cardId: number }) {
+  const [ids, setIds] = useState<number[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  useEffect(() => {
+    api.getSettings().then((r) => {
+      const s = r.settings.find((x) => x.key === "focus.card_ids");
+      setIds(Array.isArray(s?.value) ? s!.value : []);
+    }).catch(() => setIds(null));
+  }, []);
+  if (ids === null) return null;
+  const on = ids.includes(cardId);
+  const toggle = async () => {
+    setBusy(true);
+    setErr(null);
+    try {
+      const next = on ? ids.filter((x) => x !== cardId) : [...ids, cardId];
+      const r = await api.saveSettings({ "focus.card_ids": next });
+      const s = r.settings.find((x) => x.key === "focus.card_ids");
+      setIds(Array.isArray(s?.value) ? s!.value : next);
+    } catch (e) {
+      setErr(String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <span className="ml-3">
+      <button onClick={toggle} disabled={busy}
+        title="Focus card: every copy gets photos (no per-card cap), photo triage and centering ahead of everything else"
+        className={`text-[10px] border rounded px-1.5 py-0.5 ${on ? "border-green text-green" : "border-border text-muted hover:text-accent"}`}>
+        {on ? "focus card ✓ (processed first)" : "focus this card"}
+      </button>
+      {err && <span className="text-red-400 ml-2">{err}</span>}
+    </span>
   );
 }
