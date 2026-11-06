@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, imageUrl } from "../api";
-import type { CenteringMeasurement, InnerMM, Quad } from "../types";
+import type { CenteringMeasurement, CornerGrades, InnerMM, Quad } from "../types";
+import CornerZoom from "./CornerZoom";
 
 // Review / adjust one photo's centering measurement.
 //
@@ -25,6 +26,15 @@ const DASH = [6, 4];
 
 
 type Side = keyof InnerMM;
+
+/** Corner grades with at least one answer (the API rejects empty ones). */
+function cleanGrades(g: CornerGrades): CornerGrades | undefined {
+  const out: CornerGrades = {};
+  for (const [k, v] of Object.entries(g)) {
+    if (v && (v.whitening || v.shape)) out[k as keyof CornerGrades] = { ...(v.whitening ? { whitening: v.whitening } : {}), ...(v.shape ? { shape: v.shape } : {}) };
+  }
+  return Object.keys(out).length ? out : undefined;
+}
 
 /** The current measurement of a side: the accepted one, else the newest proposed. */
 export function currentMeasurement(ms: CenteringMeasurement[]): CenteringMeasurement | null {
@@ -164,6 +174,7 @@ export default function CenteringEditor({
   const [inner, setInner] = useState<InnerMM | null>(null);
   const [tags, setTags] = useState<string[]>([]);
   const [note, setNote] = useState("");
+  const [grades, setGrades] = useState<CornerGrades>({});
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [dragCorner, setDragCorner] = useState<number | null>(null);
@@ -192,6 +203,7 @@ export default function CenteringEditor({
     setInner(current?.inner_mm ? { ...current.inner_mm } : null);
     setTags(current?.tags ?? []);
     setNote(current?.note ?? "");
+    setGrades(current?.corner_grades ?? {});
     setMsg(null);
   }, [current?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -230,6 +242,13 @@ export default function CenteringEditor({
     // non-CORS copy is never reused for this CORS (pixel-reading) request
     img.src = `${imageUrl(imagePath)}?px=1`;
   }, [imagePath]);
+
+  // the engine's corner fit (v0.7): the current row's, else the newest engine row of this photo
+  const engineCorners = useMemo(() => {
+    if (current?.corners) return current.corners;
+    return measurements.filter((m) => m.placed_by === "auto" && m.corners && m.image_id === current?.image_id)
+      .sort((a, b) => b.id - a.id)[0]?.corners;
+  }, [measurements, current]);
 
   const photoFit = src ? Math.min(PHOTO_W / src.width, PHOTO_H / src.height) : 1;
   const rectFit = Math.min(RECT_W / CARD_W, RECT_H / CARD_H); // canvas px per mm at zoom 1
@@ -492,6 +511,7 @@ export default function CenteringEditor({
           inner_mm: action === "adjust" ? inner! : undefined,
           tags,
           note,
+          corner_grades: action !== "reject" ? cleanGrades(grades) : undefined,
         });
         onSaved(res.measurements);
         setMsg(action === "adjust" ? "Adjustment saved." : action === "accept" ? "Accepted." : "Marked unmeasurable.");
@@ -503,7 +523,7 @@ export default function CenteringEditor({
         setSaving(false);
       }
     },
-    [current, copyId, quad, inner, tags, note, onSaved],
+    [current, copyId, quad, inner, tags, note, grades, onSaved],
   );
 
   if (!imagePath) return <div className="text-xs text-muted">No {side} photo stored yet.</div>;
@@ -559,6 +579,10 @@ export default function CenteringEditor({
           <div className="text-[10px] text-muted mt-0.5">
             drag a corner onto the cut edge · wheel = zoom, drag empty space = pan · Tab / Shift+Tab = next / previous corner · arrows = 1 px (Shift 10)
           </div>
+          {stage !== "inner" && quad && src && (
+            <CornerZoom bitmap={bitmapRef.current} quad={quad} setQuad={setQuad} engine={engineCorners}
+              grades={grades} setGrades={setGrades} ppmm={srcPpmm} />
+          )}
         </div>
         <div style={{ width: RECT_W }} className={stage === "outer" ? "opacity-60" : ""}>
           <canvas
