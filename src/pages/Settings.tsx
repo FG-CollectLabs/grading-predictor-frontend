@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../api";
-import type { Setting } from "../types";
+import type { Setting, SettingValue } from "../types";
 
 // Operating settings (backend internal/predictor/settings.go): AI job sizes,
 // the per-card cap, photo storage limits, housekeeping. Edits take effect on
 // the next run of whatever reads them (AI jobs hourly, workers within a
 // minute, the API within 30 s). Saving needs the admin token.
 
-type Draft = Record<string, number | boolean | null>; // null = back to default
+type Draft = Record<string, SettingValue | null>; // null = back to default
+const same = (a: SettingValue | null, b: SettingValue | null) => JSON.stringify(a) === JSON.stringify(b);
 
 const GROUP_NOTE: Record<string, string> = {
   "AI jobs": "Hourly jobs on agent2 (tools/cert_reader.py). One AI look answers card, grade and cert together. Read at the start of each run.",
@@ -32,8 +33,9 @@ export default function Settings() {
     return [...m.entries()];
   }, [items]);
 
-  const invalid = (s: Setting, v: number | boolean | null) =>
+  const invalid = (s: Setting, v: SettingValue | null) =>
     v === null || s.kind === "bool" ? null
+      : s.kind === "ids" ? (Array.isArray(v) && v.every((x) => Number.isInteger(x) && x > 0) && v.length <= s.max ? null : `card ids (up to ${s.max})`)
       : Number.isNaN(v as number) ? "a number"
       : (v as number) < s.min || (v as number) > s.max ? `${s.min}–${s.max}`
       : s.kind === "int" && !Number.isInteger(v) ? "a whole number" : null;
@@ -78,10 +80,10 @@ export default function Settings() {
               const v = has ? draft[s.key] : s.value;
               const shown = v === null ? s.default : v;
               const problem = has ? invalid(s, draft[s.key]) : null;
-              const set = (x: number | boolean | null) =>
+              const set = (x: SettingValue | null) =>
                 setDraft((d) => {
                   const n = { ...d };
-                  if (x !== null && x === s.value) delete n[s.key];
+                  if (x !== null && same(x, s.value)) delete n[s.key];
                   else if (x === null && !s.is_set) delete n[s.key];
                   else n[s.key] = x;
                   return n;
@@ -94,7 +96,7 @@ export default function Settings() {
                       {has && <span className="ml-2 text-yellow text-[10px]">changed</span>}
                     </div>
                     <div className="text-[10px] text-muted">
-                      {s.help} Default {String(s.default)}{s.unit ? ` ${s.unit}` : ""}.
+                      {s.help} Default {Array.isArray(s.default) ? (s.default.length ? s.default.join(", ") : "none") : String(s.default)}{s.unit && !Array.isArray(s.default) ? ` ${s.unit}` : ""}.
                       {s.is_set && s.updated_at && ` Set ${new Date(s.updated_at).toLocaleString()}.`}
                     </div>
                   </div>
@@ -104,6 +106,11 @@ export default function Settings() {
                         <input type="checkbox" checked={Boolean(shown)} onChange={(e) => set(e.target.checked)} />
                         {shown ? "on" : "off"}
                       </label>
+                    ) : s.kind === "ids" ? (
+                      <>
+                        <IdsInput value={Array.isArray(shown) ? shown : []} bad={!!problem} onChange={set} />
+                        <span className="text-[10px] text-muted w-20">{s.unit}</span>
+                      </>
                     ) : (
                       <>
                         <input
@@ -147,5 +154,23 @@ export default function Settings() {
         {saved && !dirty.length && <span className="text-xs text-green">{saved}</span>}
       </div>
     </div>
+  );
+}
+
+// card ids as "5217, 12": kept as typed while editing, parsed to numbers
+function IdsInput({ value, bad, onChange }: { value: number[]; bad: boolean; onChange: (v: number[]) => void }) {
+  const parse = (t: string) => t.split(/[\s,]+/).filter(Boolean).map(Number);
+  const [text, setText] = useState(value.join(", "));
+  // follow outside changes (reset to default, saved) without fighting the typing
+  useEffect(() => {
+    if (parse(text).join(",") !== value.join(",")) setText(value.join(", "));
+  }, [value.join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
+  return (
+    <input value={text} placeholder="e.g. 5217"
+      onChange={(e) => {
+        setText(e.target.value);
+        onChange(parse(e.target.value));
+      }}
+      className={`w-40 bg-bg border rounded px-2 py-1 text-xs ${bad ? "border-red-400" : "border-border"}`} />
   );
 }

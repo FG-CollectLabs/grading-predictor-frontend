@@ -609,8 +609,9 @@ export interface InfraCapacity {
   steady_bytes_per_day: number; days: InfraCapacityDay[];
 }
 
+export type SettingValue = number | boolean | number[];
 export interface Setting {
-  key: string; group: string; label: string; help: string; kind: "int" | "float" | "bool"; unit?: string;
-  default: number | boolean; min: number; max: number;
-  value: number | boolean; is_set: boolean; updated_at: string | null; updated_by: string | null;
+  key: string; group: string; label: string; help: string; kind: "int" | "float" | "bool" | "ids"; unit?: string;
+  default: SettingValue; min: number; max: number;
+  value: SettingValue; is_set: boolean; updated_at: string | null; updated_by: string | null;
 }

@@ -1,5 +1,5 @@
 import type {
-  CenteringAnalytics, CenteringOdds, CardHit,
+  CenteringAnalytics, CenteringOdds, CardHit, SettingValue,
   Card,
   CardDetail,
   CertRow,
@@ -98,7 +98,7 @@ export const api = {
   createCard: (req: CreateCardRequest) => post<CardDetail>("/v1/cards", req),
   patchCard: (id: number, req: CreateCardRequest) => patch<CardDetail>(`/v1/cards/${id}`, req),
   getSettings: () => get<{ settings: Setting[] }>(`/v1/settings`),
-  saveSettings: (changes: Record<string, number | boolean | null>) => patch<{ settings: Setting[] }>(`/v1/settings`, changes),
+  saveSettings: (changes: Record<string, SettingValue | null>) => patch<{ settings: Setting[] }>(`/v1/settings`, changes),
   deleteCard: async (id: number) => {
     const res = await fetch(`${BASE}/v1/cards/${id}`, {
       method: "DELETE",
