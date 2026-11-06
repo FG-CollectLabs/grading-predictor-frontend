@@ -562,7 +562,7 @@ export interface CenteringAnalytics {
   listing_mix?: Record<string, number>; median_off_center?: OffCenter;
   noticed?: Record<keyof OffCenter, Noticed>;
   observed?: Partial<Record<keyof OffCenter, ObservedBin[]>>;
-  grid?: { x: string; y: string; max: number; back_off_center: { lr: number; tb: number };
+  grid?: { x: string; y: string; max: number; step?: number; back_off_center: { lr: number; tb: number };
     cells: { p: number[]; observed: Record<string, number> }[][] };
   curves?: Record<keyof OffCenter, number[][]>;
   backtest?: CenteringBacktest | null; notes?: string[];
