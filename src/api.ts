@@ -1,5 +1,5 @@
 import type {
-  CenteringAnalytics, CenteringOdds,
+  CenteringAnalytics, CenteringOdds, CardHit,
   Card,
   CardDetail,
   CertRow,
@@ -175,6 +175,7 @@ export const api = {
     get<{ cards: SetCard[] }>(`/v1/analytics/sets/${encodeURIComponent(code)}/cards?language=${language}`),
   getCardAnalytics: (id: number) => get<CardAnalytics>(`/v1/analytics/cards/${id}`),
   getCenteringAnalytics: (p: URLSearchParams) => get<CenteringAnalytics>(`/v1/analytics/centering?${p.toString()}`),
+  searchCards: (q: string) => get<{ cards: CardHit[] }>(`/v1/analytics/card-search?q=${encodeURIComponent(q)}`),
   getCenteringOdds: (p: URLSearchParams) => get<CenteringOdds>(`/v1/analytics/centering/odds?${p.toString()}`),
   getPrediction: (copyId: number) => get<Prediction>(`/v1/predict/${copyId}`),
   predict: async (cardId: number, front: File, back: File) => {

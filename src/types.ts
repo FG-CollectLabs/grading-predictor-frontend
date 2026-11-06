@@ -530,12 +530,27 @@ export interface CenteringBacktest {
   n: number; folds: number; auc_top: number; log_loss: number; baseline_log_loss: number;
   reliability: { predicted: number; actual: number; n: number }[]; explanation: string;
 }
+export interface ObservedBin { lo: number; hi: number; n: number; top: number; rate: number; ci_lo: number; ci_hi: number }
+export interface Noticed { centered: number; starts_at: number | null; at: Record<string, number> }
+export interface CardPoint {
+  copy_id: number; grader: string; grade: string; front_lr: number; front_tb: number; back_lr: number; back_tb: number;
+  validated: boolean; plausible: boolean;
+}
+export interface CardView {
+  card: { id: number; card_name: string; card_number: string; set_name: string; set_code: string; image_url: string | null };
+  grades: Record<string, Record<string, number>>; measured: number; points: CardPoint[];
+  misses: { grader: string; below_top: number; off_center: number; centered_anyway: number }[];
+  psa_gem_rate?: { pct: number; pop_total: number };
+}
+export interface CardHit { id: number; card_name: string; card_number: string; set_name: string; language: string; image_url: string | null; measured: number }
 export interface CenteringAnalytics {
   grader: string; status: "ready" | "too_few"; note?: string; as_of: string; graders: Record<string, number>;
-  filters: { language: string; era: string; set_code: string };
-  classes?: string[]; counts?: Record<string, number>; n?: number; validated?: number;
+  filters: { language: string; era: string; set_code: string; card_id: number };
+  card?: CardView;
+  classes?: string[]; counts?: Record<string, number>; n?: number; validated?: number; excluded_implausible?: number; pooled?: boolean;
   listing_mix?: Record<string, number>; median_off_center?: OffCenter;
-  effects?: Record<keyof OffCenter, { per_point_before_knee: number; per_point_past_knee: number }>;
+  noticed?: Record<keyof OffCenter, Noticed>;
+  observed?: Partial<Record<keyof OffCenter, ObservedBin[]>>;
   grid?: { x: string; y: string; max: number; back_off_center: { lr: number; tb: number };
     cells: { p: number[]; observed: Record<string, number> }[][] };
   curves?: Record<keyof OffCenter, number[][]>;
