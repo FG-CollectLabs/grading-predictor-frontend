@@ -362,7 +362,7 @@ export interface CenteringBrief {
 }
 
 export interface CenteringAction {
-  action: "accept" | "adjust" | "reject";
+  action: "accept" | "adjust" | "confirm_outer" | "reject";
   base_id: number;
   outer_quad?: Quad;
   inner_mm?: InnerMM;
