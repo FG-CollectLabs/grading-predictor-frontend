@@ -143,7 +143,7 @@ export default function ConditionStep({ kind, copyId, version, onDone }: {
                       </div>
                     </td>
                   );
-                }))}
+                })}
               </tr>
             )))}
           </tbody>
