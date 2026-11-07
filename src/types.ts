@@ -566,6 +566,8 @@ export interface CenteringAnalytics {
     cells: { p: number[]; observed: Record<string, number> }[][] };
   curves?: Record<keyof OffCenter, number[][]>;
   backtest?: CenteringBacktest | null; notes?: string[];
+  corner_curves?: Record<"front" | "back", number[][]>;
+  corner_observed?: Partial<Record<"front" | "back", ObservedBin[]>>;
 }
 export interface CenteringOdds { off_center: OffCenter; predictions: GraderPrediction[] | null; caveats: string[] }
 export interface Prediction {
