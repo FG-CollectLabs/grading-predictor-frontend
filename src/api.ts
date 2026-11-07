@@ -230,6 +230,9 @@ export const api = {
     post<RawFeedback>(`/v1/feedback/${fid}/resolve`, { resolution, note }),
   datasetTag: (id: number, tag: "training" | "evaluation" | null) => post<{ dataset_tag: string | null }>(`/v1/copies/${id}/dataset-tag`, { tag }),
   rawCalibration: () => get<RawCalibration>(`/v1/raw-calibration`),
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  autoActions: () => get<{ categories: any[] }>(`/v1/auto-actions`),
+  restoreCopy: (id: number, note = "") => post<{ restored: boolean }>(`/v1/copies/${id}/restore`, { note }),
   markBought: (id: number, bought: boolean, priceCents?: number) =>
     post<CopyDetail>(`/v1/copies/${id}/bought`, { bought, price_cents: priceCents }),
   rotatePhoto: (id: number, side: "front" | "back", degrees: 90 | 180 | 270) =>
