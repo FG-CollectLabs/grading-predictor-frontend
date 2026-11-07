@@ -153,6 +153,8 @@ function CardPicker({ cardId, name, onPick }: { cardId: string; name: string; on
 
 function WhatIf({ cardId, cardName }: { cardId: string; cardName?: string }) {
   const [v, setV] = useState<Record<keyof OffCenter, string>>({ front_lr: "52", front_tb: "50", back_lr: "55", back_tb: "52" });
+  // worst corner off-round per side (mm); null = not known (counts as average)
+  const [corner, setCorner] = useState<{ front: number | null; back: number | null }>({ front: null, back: null });
   const [res, setRes] = useState<CenteringOdds | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const valid = Object.values(v).every((x) => x !== "" && +x >= 0 && +x <= 100);
@@ -162,10 +164,12 @@ function WhatIf({ cardId, cardName }: { cardId: string; cardName?: string }) {
     const t = setTimeout(() => {
       const p = new URLSearchParams(v);
       if (cardId) p.set("card_id", cardId);
+      if (corner.front != null) p.set("front_corner_offround", String(corner.front));
+      if (corner.back != null) p.set("back_corner_offround", String(corner.back));
       api.getCenteringOdds(p).then((r) => { setRes(r); setErr(null); }).catch((e: unknown) => setErr(String(e)));
     }, 250);
     return () => clearTimeout(t);
-  }, [v, cardId, valid]);
+  }, [v, cardId, valid, corner]);
 
   return (
     <div className="bg-surface border border-border rounded p-4 space-y-3">
@@ -192,6 +196,21 @@ function WhatIf({ cardId, cardName }: { cardId: string; cardName?: string }) {
             </label>
           );
         })}
+        {(["front", "back"] as const).map((side) => (
+          <label key={side} className="flex flex-col gap-1 w-56">
+            <span className="flex justify-between">
+              <span className="text-muted">{side === "front" ? "Front" : "Back"} worst corner</span>
+              <span className="font-mono">
+                {corner[side] == null ? "not known" : `${Math.round(corner[side]! * 1000)} µm off-round`}
+                {corner[side] != null && <button className="ml-1 text-muted hover:text-accent" onClick={(e) => { e.preventDefault(); setCorner({ ...corner, [side]: null }); }}>×</button>}
+              </span>
+            </span>
+            <input type="range" min={0} max={0.4} step={0.01} value={corner[side] ?? 0.1}
+              onChange={(e) => setCorner({ ...corner, [side]: +e.target.value })}
+              aria-label={`${side} worst corner off-round in mm`} />
+            <span className="flex justify-between text-[9px] text-muted font-mono"><span>clean cut</span><span>0.2 mm</span><span>0.4 mm</span></span>
+          </label>
+        ))}
       </div>
       {err && <div className="text-xs text-red-400">{err}</div>}
       {res && !res.predictions?.length && <div className="text-xs text-muted">No grader has enough measured copies yet.</div>}
@@ -357,6 +376,7 @@ function Fitted({ d }: { d: CenteringAnalytics }) {
         <Tile label="backtest log loss" value={bt ? bt.log_loss.toFixed(3) : "—"} sub={bt ? `vs ${bt.baseline_log_loss.toFixed(3)} guessing the mix (lower is better)` : "—"} />
       </div>
       <NoticedTable d={d} />
+      {d.corner_curves && <CornerChart d={d} />}
       <div className="grid md:grid-cols-2 gap-6">
         <Curves d={d} axes={["front_lr", "front_tb"]} title="Front" max={15} />
         <Curves d={d} axes={["back_lr", "back_tb"]} title="Back" max={30} />
@@ -625,5 +645,58 @@ function FocusButton({ cardId }: { cardId: number }) {
       </button>
       {err && <span className="text-red-400 ml-2">{err}</span>}
     </span>
+  );
+}
+
+// odds as the worst corner's cut strays from a clean quarter circle (corner
+// check), centering at the median; dots = what was seen, with a 90% range
+function CornerChart({ d }: { d: CenteringAnalytics }) {
+  const classes = d.classes ?? [];
+  const K = classes.length;
+  const top = classes[K - 1];
+  const W = 440, H = 220, pad = { l: 40, r: 60, t: 10, b: 30 }, max = 0.4;
+  const sx = (x: number) => pad.l + (x / max) * (W - pad.l - pad.r);
+  const sy = (p: number) => pad.t + (1 - p) * (H - pad.t - pad.b);
+  const sides = ["front", "back"] as const;
+  const seen = (sd: (typeof sides)[number]) => (d.corner_observed?.[sd] ?? []).filter((b) => b.n >= 10);
+  const measured = sides.reduce((a, sd) => a + (d.corner_observed?.[sd] ?? []).reduce((x, b) => x + b.n, 0), 0);
+  return (
+    <div className="bg-surface border border-border rounded p-4">
+      <div className="text-xs font-semibold">Corner cut: odds of {label(d.grader, top)} as the worst corner strays from a clean quarter circle</div>
+      <div className="text-[10px] text-muted mb-1">
+        line = model (centering typical, the other side's corners average) · dots = share seen, bars = 90% range (10+ copies) · {measured.toLocaleString()} measured sides so far; the factor firms up as corners are measured
+      </div>
+      <div className="flex gap-3 text-[10px] text-muted mb-1">
+        {sides.map((sd, i) => <span key={sd} className="flex items-center gap-1"><span className="inline-block w-3 h-0.5" style={{ background: SERIES[i] }} />{sd}</span>)}
+      </div>
+      <svg width={W} height={H} role="img" aria-label="odds by corner off-round">
+        {[0, 0.25, 0.5, 0.75, 1].map((p) => (
+          <g key={p}>
+            <line x1={pad.l} x2={W - pad.r} y1={sy(p)} y2={sy(p)} stroke="#30363d" strokeWidth={0.5} />
+            <text x={pad.l - 6} y={sy(p) + 3} textAnchor="end" fontSize={10} className="fill-[#8b949e]">{pct(p)}</text>
+          </g>
+        ))}
+        {[0, 0.1, 0.2, 0.3, 0.4].map((x) => (
+          <text key={x} x={sx(x)} y={H - 12} textAnchor="middle" fontSize={10} className="fill-[#8b949e]">{x} mm</text>
+        ))}
+        {sides.map((sd, i) => (
+          <g key={sd}>
+            {seen(sd).map((b) => {
+              const x = sx((b.lo + b.hi) / 2) + (i ? 3 : -3);
+              return (
+                <g key={b.lo}>
+                  <line x1={x} x2={x} y1={sy(b.ci_lo)} y2={sy(b.ci_hi)} stroke={SERIES[i]} strokeWidth={1} opacity={0.6} />
+                  <circle cx={x} cy={sy(b.rate)} r={3} fill={SERIES[i]} stroke="#161b22" strokeWidth={1.5}>
+                    <title>{`${sd} ${b.lo.toFixed(2)}–${b.hi.toFixed(2)} mm: ${b.top}/${b.n} = ${pct(b.rate)} (90%: ${pct(b.ci_lo)}–${pct(b.ci_hi)})`}</title>
+                  </circle>
+                </g>
+              );
+            })}
+            <polyline fill="none" stroke={SERIES[i]} strokeWidth={2}
+              points={(d.corner_curves?.[sd] ?? []).map((r) => `${sx(r[0])},${sy(r[K])}`).join(" ")} />
+          </g>
+        ))}
+      </svg>
+    </div>
   );
 }
