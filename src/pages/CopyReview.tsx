@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { api, imageUrl } from "../api";
 import type { CenteringMeasurement, CopyDetail, CopyList, CopyPhoto, ReviewSteps, StepDecision, StepId } from "../types";
 import CenteringEditor from "../components/CenteringEditor";
+import ConditionStep from "../components/ConditionStep";
 import { FLAG_LABELS, StatusBadge, gradeText } from "./Copies";
 
 // Pre-grading review of one copy, step by step, in the factory's order:
@@ -24,12 +25,12 @@ const STEPS: Step[] = [
   { id: "front_inner", n: "4b", title: "Front · inner border" },
   { id: "back_outer", n: "5a", title: "Back · outer edge" },
   { id: "back_inner", n: "5b", title: "Back · inner border" },
-  { id: "corners", n: "6", title: "Corners", soon: true },
-  { id: "edges", n: "7", title: "Edges", soon: true },
+  { id: "corners", n: "6", title: "Corners" },
+  { id: "edges", n: "7", title: "Edges" },
 ];
 // steps a raw copy skips (no slab, no listing grade, no cert)
 const RAW_SKIP = new Set<StepId>(["card", "listing", "cert", "photos"]);
-const REQUIRED: StepId[] = ["card", "listing", "cert", "photos", "front_outer", "front_inner", "back_outer", "back_inner"];
+const REQUIRED: StepId[] = ["card", "listing", "cert", "photos", "front_outer", "front_inner", "back_outer", "back_inner", "corners", "edges"];
 
 const DECISION_STYLE: Record<StepDecision, { icon: string; cls: string; label: string }> = {
   approved: { icon: "✓", cls: "text-green", label: "approved" },
@@ -659,11 +660,8 @@ export default function CopyReview() {
           })}
 
           {(active === "corners" || active === "edges") && (
-            <div className="text-xs text-muted bg-surface border border-dashed border-border rounded-md p-6">
-              {active === "corners"
-                ? "Coming later: each corner front and back. Is it a clean quarter circle? Any whitening from a dull blade on the back?"
-                : "Coming later: each edge. Fraying, silvering and other cutting imperfections."}
-            </div>
+            <ConditionStep key={active} kind={active} copyId={copy.id} version={centering.filter((m) => m.status !== "superseded").map((m) => m.id).join("-")}
+              onDone={(decision, info) => record(active, decision, { payload: info })} />
           )}
 
           {active !== "corners" && active !== "edges" && decided.get(active) && (
@@ -790,6 +788,7 @@ const STATION_TITLE: Record<string, string> = {
 const STEP_STATION: Record<string, string> = {
   card: "card", listing: "grade", cert: "cert", photos: "photos",
   front_outer: "front", front_inner: "front", back_outer: "back", back_inner: "back",
+  corners: "corners", edges: "edges",
 };
 
 const MACHINE: Record<string, { icon: string; cls: string; text: string }> = {

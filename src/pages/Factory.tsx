@@ -57,6 +57,7 @@ export default function Factory() {
         <h1 className="text-lg font-semibold">Pre-grading factory</h1>
         <span className="text-xs text-muted">
           {n(needsYou)} station checks need you · <Link to="/factory/history" className="text-accent hover:underline">my review history →</Link>
+          {" · "}<Link to="/factory/priority" className="text-accent hover:underline">what to review next →</Link>
           {" · "}<Link to="/factory/raw" className="text-accent hover:underline">raw copies (tracker) →</Link>
           {" · "}<Link to="/factory/auto" className="text-accent hover:underline">automatic decisions →</Link>
           {asOf && <> · numbers as of {asOf} (refreshed every few minutes; links show exact lists)</>}
@@ -109,8 +110,12 @@ export default function Factory() {
         <Machine s={by.back} n0="6" power={`centering engine${version ? ` v${version}` : ""} · back templates ${backTemplates(stats.centering.back_templates)}`} worker={status.centering_paused} />
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <Later n0="7" title="Corners" text="Each corner front and back: a clean quarter circle? Whitening from a dull blade on the back?" />
-        <Later n0="8" title="Edges" text="Each edge: fraying, silvering and other cutting imperfections. Then the backtest: where PSA 10 vs 9 actually breaks." />
+        {by.corners
+          ? <Machine s={by.corners} n0="7" power="inspection sheets of the four corners (cut along the settled outline) + the engine's roundness / whitening readings → AI check: whitening, softening, dings, foil chips" />
+          : <Later n0="7" title="Corners" text="Each corner front and back: a clean quarter circle? Whitening from a dull blade on the back?" />}
+        {by.edges
+          ? <Machine s={by.edges} n0="8" power="the four edges between the corners + the engine's straightness / nick / whitening readings → AI check: whitening, rough cut, dents, layer splits, ink" />
+          : <Later n0="8" title="Edges" text="Each edge: fraying, silvering and other cutting imperfections. Then the backtest: where PSA 10 vs 9 actually breaks." />}
       </div>
 
       <Feedback stats={stats} />

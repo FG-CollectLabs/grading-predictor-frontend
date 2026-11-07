@@ -1,5 +1,5 @@
 import type {
-  CenteringAnalytics, CenteringOdds, CardHit, SettingValue, RawFeedback, RawCalibration,
+  CenteringAnalytics, CenteringOdds, CardHit, SettingValue, RawFeedback, RawCalibration, ConditionReview, ConditionFindings,
   Card,
   CardDetail,
   CertRow,
@@ -225,6 +225,8 @@ export const api = {
   reviewCopy: (id: number, req: ReviewRequest) => post<CopyDetail>(`/v1/copies/${id}/review`, req),
   gradeCorrection: (id: number, g: { grader: string; grade: number; grade_label: string; note: string }) =>
     post<ReviewSteps>(`/v1/copies/${id}/grade-correction`, g),
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  reviewPriority: (fresh = false) => get<{ as_of: string; report: any }>(`/v1/review-priority${fresh ? "?fresh=1" : ""}`),
   listFeedback: (p: URLSearchParams) => getAuthed<{ feedback: RawFeedback[] }>(`/v1/feedback?${p.toString()}`),
   resolveFeedback: (fid: number, resolution: string, note = "") =>
     post<RawFeedback>(`/v1/feedback/${fid}/resolve`, { resolution, note }),
@@ -233,6 +235,10 @@ export const api = {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   autoActions: () => get<{ categories: any[] }>(`/v1/auto-actions`),
   restoreCopy: (id: number, note = "") => post<{ restored: boolean }>(`/v1/copies/${id}/restore`, { note }),
+  getCondition: (id: number) => get<{ reviews: ConditionReview[]; issues: Record<string, Record<string, boolean>>; parts: Record<string, Record<string, boolean>> }>(`/v1/copies/${id}/condition`),
+  postCondition: (id: number, body: { by: "user"; findings: ConditionFindings; photo_ok?: boolean; note?: string }) =>
+    post<{ id: number; corners_clean: boolean; edges_clean: boolean }>(`/v1/copies/${id}/condition`, body),
+  inspectUrl: (id: number, side: "front" | "back", v: number | string = "") => `${BASE}/v1/copies/${id}/inspect/${side}.jpg?v=${v}`,
   markBought: (id: number, bought: boolean, priceCents?: number) =>
     post<CopyDetail>(`/v1/copies/${id}/bought`, { bought, price_cents: priceCents }),
   rotatePhoto: (id: number, side: "front" | "back", degrees: 90 | 180 | 270) =>

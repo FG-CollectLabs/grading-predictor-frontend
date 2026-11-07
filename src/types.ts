@@ -486,7 +486,7 @@ export interface ReviewSteps {
 
 // ── Factory stations ─────────────────────────────────────────────────────────
 
-export type StationId = "card" | "grade" | "cert" | "photos" | "front" | "back";
+export type StationId = "card" | "grade" | "cert" | "photos" | "front" | "back" | "corners" | "edges";
 export type StationState = "upstream" | "queued" | "high" | "medium" | "low" | "reviewed" | "removed" | "n/a" | "scans";
 
 export interface StationStats {
@@ -635,4 +635,12 @@ export interface RawCalibration {
   buckets: { lo: number; hi: number; n: number; predicted: number; actual: number }[];
   feedback: { all: RateRow; by: Record<"issue" | "card" | "err_pp" | "flag", RateRow[]> };
   notes: string[];
+}
+
+// corner / edge condition (backend condition.go)
+export type Severity = "none" | "minor" | "major" | "unsure";
+export type ConditionFindings = Partial<Record<"front" | "back", Partial<Record<"corners" | "edges", Record<string, Record<string, Severity>>>>>>;
+export interface ConditionReview {
+  id: number; placed_by: string; findings: ConditionFindings; corners_clean: boolean | null; edges_clean: boolean | null;
+  photo_ok: boolean | null; confidence: number | null; note: string | null; created_at: string;
 }
