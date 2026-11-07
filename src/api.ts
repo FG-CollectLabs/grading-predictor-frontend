@@ -1,5 +1,5 @@
 import type {
-  CenteringAnalytics, CenteringOdds, CardHit, SettingValue,
+  CenteringAnalytics, CenteringOdds, CardHit, SettingValue, RawFeedback, RawCalibration,
   Card,
   CardDetail,
   CertRow,
@@ -54,6 +54,13 @@ function authHeaders(): HeadersInit {
 
 async function get<T>(path: string): Promise<T> {
   const res = await fetch(`${BASE}${path}`);
+  if (!res.ok) throw new Error(`GET ${path}: ${res.status}`);
+  return res.json() as Promise<T>;
+}
+
+// GET with the admin token (endpoints that show reviewer details)
+async function getAuthed<T>(path: string): Promise<T> {
+  const res = await fetch(`${BASE}${path}`, { headers: authHeaders() });
   if (!res.ok) throw new Error(`GET ${path}: ${res.status}`);
   return res.json() as Promise<T>;
 }
@@ -218,6 +225,11 @@ export const api = {
   reviewCopy: (id: number, req: ReviewRequest) => post<CopyDetail>(`/v1/copies/${id}/review`, req),
   gradeCorrection: (id: number, g: { grader: string; grade: number; grade_label: string; note: string }) =>
     post<ReviewSteps>(`/v1/copies/${id}/grade-correction`, g),
+  listFeedback: (p: URLSearchParams) => getAuthed<{ feedback: RawFeedback[] }>(`/v1/feedback?${p.toString()}`),
+  resolveFeedback: (fid: number, resolution: string, note = "") =>
+    post<RawFeedback>(`/v1/feedback/${fid}/resolve`, { resolution, note }),
+  datasetTag: (id: number, tag: "training" | "evaluation" | null) => post<{ dataset_tag: string | null }>(`/v1/copies/${id}/dataset-tag`, { tag }),
+  rawCalibration: () => get<RawCalibration>(`/v1/raw-calibration`),
   markBought: (id: number, bought: boolean, priceCents?: number) =>
     post<CopyDetail>(`/v1/copies/${id}/bought`, { bought, price_cents: priceCents }),
   rotatePhoto: (id: number, side: "front" | "back", degrees: 90 | 180 | 270) =>

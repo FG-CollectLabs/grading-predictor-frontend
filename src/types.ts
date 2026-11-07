@@ -619,3 +619,20 @@ export interface Setting {
   default: SettingValue; min: number; max: number;
   value: SettingValue; is_set: boolean; updated_at: string | null; updated_by: string | null;
 }
+
+// raw-copy feedback from the market tracker (backend raw_feedback.go)
+export interface RawFeedback {
+  id: number; copy_id: number; snapshot_id: number | null; snapshot_version: number | null;
+  verdict: "looks_right" | "false_positive" | "false_negative" | "bad_measurement" | "wrong_card" | "unusable_photos";
+  issues: string[]; note: string | null; reviewer: string | null; source: string; external_id: string | null;
+  source_ref: string | null; listing_id: string | null; market_display_key: string | null;
+  odds_shown: { psa10_p?: number; psa10_prior?: number; summary?: string } | null;
+  resolution: string | null; resolution_note: string | null; resolved_by: string | null; resolved_at: string | null; created_at: string;
+}
+export interface RateRow { key: string; judged: number; false_positive: number; false_positive_rate: number }
+export interface RawCalibration {
+  outcomes: number; brier?: number;
+  buckets: { lo: number; hi: number; n: number; predicted: number; actual: number }[];
+  feedback: { all: RateRow; by: Record<"issue" | "card" | "err_pp" | "flag", RateRow[]> };
+  notes: string[];
+}
