@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { api, imageUrl } from "../api";
-import type { CopyList, CopyRow } from "../types";
+import type { CopyDetail, CopyList, CopyRow, Prediction, RawCalibration, RawFeedback } from "../types";
 
 // Raw copies: cards sent for grade odds without a slab (POST /v1/predict, e.g.
 // the market tracker's eBay listings and "check centering"). Their photos and
@@ -14,13 +14,14 @@ const usd = (c: number) => `$${(c / 100).toLocaleString(undefined, { maximumFrac
 
 export default function RawCopies() {
   const [params, setParams] = useSearchParams();
-  const view = params.get("view") ?? "bought";
+  const view = params.get("view") ?? "flagged";
   const offset = Number(params.get("offset") ?? 0);
   const [data, setData] = useState<CopyList | null>(null);
   const [counts, setCounts] = useState<{ bought: number; all: number } | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
+    if (view === "flagged") return;
     const p = new URLSearchParams({ grader: "RAW", limit: String(PAGE), offset: String(offset) });
     if (view === "bought") p.set("bought", "yes");
     setData(null);
@@ -53,18 +54,19 @@ export default function RawCopies() {
         </p>
       </div>
       <div className="flex gap-2">
+        {tab("flagged", "flagged by the tracker")}
         {tab("bought", "bought", counts?.bought)}
         {tab("all", "all raw copies", counts?.all)}
       </div>
       {err && <div className="text-xs text-red-400">{err}</div>}
-      {!data ? <div className="text-xs text-muted">loading…</div>
+      {view === "flagged" ? <Flagged /> : !data ? <div className="text-xs text-muted">loading…</div>
         : data.items.length === 0 ? <div className="text-xs text-muted">{view === "bought" ? "No copies marked bought yet." : "No raw copies yet."}</div>
         : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
             {data.items.map((c) => <Tile key={c.id} c={c} />)}
           </div>
         )}
-      {data && data.total > PAGE && (
+      {view !== "flagged" && data && data.total > PAGE && (
         <div className="flex gap-2 text-xs">
           <button disabled={offset === 0} onClick={() => setParams({ view, offset: String(Math.max(0, offset - PAGE)) })}
             className="border border-border rounded px-2 py-1 disabled:opacity-40">← newer</button>
@@ -97,5 +99,131 @@ function Tile({ c }: { c: CopyRow }) {
         <span className="text-muted">{new Date(c.updated_at).toLocaleDateString()}</span>
       </div>
     </Link>
+  );
+}
+
+// ── flagged by the tracker ───────────────────────────────────────────────────
+
+const VERDICT: Record<string, string> = {
+  false_positive: "odds too high", false_negative: "odds too low", bad_measurement: "bad measurement",
+  wrong_card: "wrong card", unusable_photos: "unusable photos", looks_right: "looks right",
+};
+const RESOLUTIONS = [
+  ["model_wrong", "model wrong"], ["measurement_wrong", "measurement wrong"], ["photo_limit", "photo limit"], ["user_wrong", "flag was wrong"],
+] as const;
+const pct = (p?: number | null) => (p == null ? "—" : `${Math.round(p * 100)}%`);
+
+function Flagged() {
+  const [list, setList] = useState<RawFeedback[] | null>(null);
+  const [cal, setCal] = useState<RawCalibration | null>(null);
+  const [showResolved, setShowResolved] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const load = () => {
+    const p = new URLSearchParams({ limit: "300" });
+    if (!showResolved) p.set("resolved", "no");
+    api.listFeedback(p).then((r) => setList(r.feedback)).catch((e: unknown) => setErr(String(e)));
+    api.rawCalibration().then(setCal).catch(() => undefined);
+  };
+  useEffect(load, [showResolved]); // eslint-disable-line react-hooks/exhaustive-deps
+  // flagged first: odds too high, then bad measurements, then the rest
+  const order = ["false_positive", "bad_measurement", "false_negative", "wrong_card", "unusable_photos", "looks_right"];
+  const rows = (list ?? []).slice().sort((a, b) => order.indexOf(a.verdict) - order.indexOf(b.verdict) || b.id - a.id);
+  return (
+    <div className="space-y-4">
+      {cal && <Counters cal={cal} />}
+      <label className="text-xs text-muted flex items-center gap-1">
+        <input type="checkbox" checked={showResolved} onChange={(e) => setShowResolved(e.target.checked)} /> show resolved
+      </label>
+      {err && <div className="text-xs text-red-400">{err}</div>}
+      {!list ? <div className="text-xs text-muted">loading…</div>
+        : rows.length === 0 ? <div className="text-xs text-muted">No {showResolved ? "" : "open "}feedback from the tracker yet.</div>
+        : <div className="space-y-3">{rows.map((f) => <FlagRow key={f.id} f={f} onChange={load} />)}</div>}
+    </div>
+  );
+}
+
+function Counters({ cal }: { cal: RawCalibration }) {
+  const dims: [keyof RawCalibration["feedback"]["by"], string][] = [["issue", "issue"], ["card", "card"], ["err_pp", "measurement ±"], ["flag", "engine flag"]];
+  return (
+    <div className="bg-surface border border-border rounded p-3 text-xs space-y-2">
+      <div className="font-semibold">Where the raw-copy odds go wrong</div>
+      <div className="text-[10px] text-muted">
+        {cal.outcomes > 0
+          ? <>{cal.outcomes} graded outcomes · Brier {cal.brier} · {cal.buckets.filter((b) => b.n).map((b) => `${pct(b.predicted)} predicted → ${pct(b.actual)} (${b.n})`).join(" · ")}</>
+          : <>No grading outcomes yet: the false-positive rate among judged feedback is the stand-in ({cal.feedback.all.false_positive} of {cal.feedback.all.judged} judged = {pct(cal.feedback.all.false_positive_rate)}).</>}
+      </div>
+      <div className="grid md:grid-cols-4 gap-3">
+        {dims.map(([k, label]) => (
+          <div key={k}>
+            <div className="text-[10px] text-muted mb-1">by {label}</div>
+            {(cal.feedback.by[k] ?? []).slice(0, 6).map((r) => (
+              <div key={r.key} className="flex justify-between gap-2 font-mono text-[10px]">
+                <span className="truncate">{r.key || "—"}</span><span>{pct(r.false_positive_rate)} of {r.judged}</span>
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function FlagRow({ f, onChange }: { f: RawFeedback; onChange: () => void }) {
+  const [copy, setCopy] = useState<CopyDetail | null>(null);
+  const [now, setNow] = useState<Prediction | null>(null);
+  const [res, setRes] = useState("");
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  useEffect(() => {
+    api.getCopy(f.copy_id).then(setCopy).catch(() => undefined);
+    api.getPrediction(f.copy_id).then(setNow).catch(() => undefined);
+  }, [f.copy_id]);
+  const p10now = now?.predictions?.find((g) => g.grader === "PSA")?.outcomes.find((o) => o.grade === "10")?.p;
+  const act = async (fn: () => Promise<unknown>, done: string) => {
+    setBusy(true); setMsg(null);
+    try { await fn(); setMsg(done); onChange(); } catch (e) { setMsg(String(e)); } finally { setBusy(false); }
+  };
+  return (
+    <div className="bg-surface border border-border rounded p-3 flex flex-wrap gap-3 text-xs">
+      <div className="flex gap-1">
+        {(["front_image", "back_image"] as const).map((k) => (
+          <div key={k} className="w-24 aspect-[5/7] bg-bg rounded overflow-hidden flex items-center justify-center">
+            {copy?.[k] ? <img src={imageUrl(copy[k]!)} alt={k} className="w-full h-full object-contain" loading="lazy" /> : <span className="text-[10px] text-muted">—</span>}
+          </div>
+        ))}
+      </div>
+      <div className="flex-1 min-w-64 space-y-1">
+        <div className="flex flex-wrap gap-2 items-center">
+          <span className="font-semibold">{copy ? `${copy.card_name} ${copy.card_number}` : `copy ${f.copy_id}`}</span>
+          <span className={`border rounded px-1 text-[10px] ${f.verdict === "looks_right" ? "border-green/50 text-green" : "border-red-400/50 text-red-300"}`}>{VERDICT[f.verdict] ?? f.verdict}</span>
+          {f.issues.map((i) => <span key={i} className="border border-border rounded px-1 text-[10px] text-muted">{i.replace(/_/g, " ")}</span>)}
+          {f.resolution && <span className="text-[10px] text-green">resolved: {f.resolution.replace(/_/g, " ")}</span>}
+        </div>
+        {f.note && <div className="text-muted">“{f.note}”</div>}
+        <div className="font-mono text-[11px]">
+          PSA 10 shown {pct(f.odds_shown?.psa10_p)} (snapshot v{f.snapshot_version ?? "?"}) · now {pct(p10now)}
+          {f.source_ref && <> · <a href={f.source_ref} target="_blank" rel="noreferrer" className="text-accent hover:underline">listing</a></>}
+        </div>
+        <div className="flex flex-wrap items-center gap-1 pt-1">
+          <Link to={`/copies/${f.copy_id}`} className="border border-border rounded px-1.5 py-0.5 hover:text-accent">fix the outline →</Link>
+          <select value={res} onChange={(e) => setRes(e.target.value)} className="bg-bg border border-border rounded px-1 py-0.5">
+            <option value="">resolve as…</option>
+            {RESOLUTIONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+          </select>
+          <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="note" className="w-40 bg-bg border border-border rounded px-1 py-0.5" />
+          <button disabled={busy || !res} onClick={() => act(() => api.resolveFeedback(f.id, res, note), "resolved")}
+            className="border border-border rounded px-1.5 py-0.5 hover:text-accent disabled:opacity-40">resolve</button>
+          {f.resolution && <button disabled={busy} onClick={() => act(() => api.resolveFeedback(f.id, ""), "reopened")}
+            className="border border-border rounded px-1.5 py-0.5 text-muted">reopen</button>}
+          <span className="text-muted ml-2">tag:</span>
+          {(["training", "evaluation"] as const).map((t) => (
+            <button key={t} disabled={busy} onClick={() => act(() => api.datasetTag(f.copy_id, t), `tagged ${t}`)}
+              className="border border-border rounded px-1.5 py-0.5 hover:text-accent">{t}</button>
+          ))}
+          {msg && <span className="text-[10px] text-muted ml-1">{msg}</span>}
+        </div>
+      </div>
+    </div>
   );
 }
