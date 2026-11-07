@@ -72,7 +72,10 @@ function Section({ cert, title, empty, onDone }: { cert: "present" | "missing"; 
 
   return (
     <section className="space-y-2">
-      <h2 className="text-sm font-semibold">{title} <span className="text-muted font-normal">({total.toLocaleString()})</span></h2>
+      <div className="flex items-center gap-3">
+        <h2 className="text-sm font-semibold">{title} <span className="text-muted font-normal">({total.toLocaleString()})</span></h2>
+        <DropNonEnglish cert={cert} onDone={() => { onDone(); load(); }} />
+      </div>
       {err && <div className="text-red-400 text-xs">{err}</div>}
       {!items ? (
         <div className="text-muted text-xs">loading…</div>
@@ -284,5 +287,55 @@ function Side({ side, path, busy, onFile }: { side: "front" | "back"; path: stri
       <button onClick={paste} className="w-full text-[10px] text-muted hover:text-accent">paste {side}</button>
       {hint && <div className="text-[9px] text-yellow leading-tight">{hint}</div>}
     </div>
+  );
+}
+
+// Only English cards are worth pulling scans for: remove every non-English
+// copy waiting in this list (all pages), in one go.
+function DropNonEnglish({ cert, onDone }: { cert: "present" | "missing"; onDone: () => void }) {
+  const [ids, setIds] = useState<number[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const count = async () => {
+    setBusy(true); setMsg(null);
+    try {
+      const found: number[] = [];
+      for (let off = 0; ; off += 200) {
+        const r = await api.listCopies(new URLSearchParams({ station: "photos", state: "scans", cert, limit: "200", offset: String(off) }));
+        found.push(...r.items.filter((c) => c.language && c.language !== "en").map((c) => c.id));
+        if (off + 200 >= r.total) break;
+      }
+      setIds(found);
+      if (!found.length) setMsg("none here");
+    } catch (e) { setMsg(String(e)); } finally { setBusy(false); }
+  };
+  const drop = async () => {
+    if (!ids?.length) return;
+    setBusy(true); setMsg(null);
+    try {
+      for (let i = 0; i < ids.length; i += 500) {
+        await api.bulkReview({ station: "photos", action: "remove", ids: ids.slice(i, i + 500), note: "not English: scans are only pulled for English cards" });
+      }
+      setMsg(`removed ${ids.length}`);
+      setIds(null);
+      onDone();
+    } catch (e) { setMsg(String(e)); } finally { setBusy(false); }
+  };
+  return (
+    <span className="text-xs flex items-center gap-2">
+      {ids && ids.length > 0 ? (
+        <>
+          <button disabled={busy} onClick={drop} className="border border-red-400/50 text-red-400 rounded px-2 py-0.5 hover:bg-red-500/10 disabled:opacity-40">
+            confirm: remove {ids.length} non-English
+          </button>
+          <button disabled={busy} onClick={() => setIds(null)} className="text-muted hover:text-[#e6edf3]">cancel</button>
+        </>
+      ) : (
+        <button disabled={busy} onClick={count} className="border border-border rounded px-2 py-0.5 text-muted hover:text-red-400 disabled:opacity-40">
+          {busy ? "counting…" : "remove all non-English…"}
+        </button>
+      )}
+      {msg && <span className="text-muted">{msg}</span>}
+    </span>
   );
 }

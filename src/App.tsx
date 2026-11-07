@@ -12,6 +12,7 @@ import References from "./pages/References";
 import Templates from "./pages/Templates";
 import Scans from "./pages/Scans";
 import RawCopies from "./pages/RawCopies";
+import AutoActions from "./pages/AutoActions";
 import ReviewPriority from "./pages/ReviewPriority";
 import Games from "./pages/analytics/Games";
 import Sets from "./pages/analytics/Sets";
@@ -102,6 +103,7 @@ export default function App() {
             <Route path="/factory/templates" element={<Templates />} />
             <Route path="/factory/scans" element={<Scans />} />
             <Route path="/factory/raw" element={<RawCopies />} />
+            <Route path="/factory/auto" element={<AutoActions />} />
             <Route path="/factory/priority" element={<ReviewPriority />} />
             <Route path="/copies" element={<Copies />} />
             <Route path="/copies/:id" element={<CopyReview />} />

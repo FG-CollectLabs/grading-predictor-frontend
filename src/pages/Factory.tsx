@@ -59,6 +59,7 @@ export default function Factory() {
           {n(needsYou)} station checks need you · <Link to="/factory/history" className="text-accent hover:underline">my review history →</Link>
           {" · "}<Link to="/factory/priority" className="text-accent hover:underline">what to review next →</Link>
           {" · "}<Link to="/factory/raw" className="text-accent hover:underline">raw copies (tracker) →</Link>
+          {" · "}<Link to="/factory/auto" className="text-accent hover:underline">automatic decisions →</Link>
           {asOf && <> · numbers as of {asOf} (refreshed every few minutes; links show exact lists)</>}
         </span>
         <button onClick={refresh} disabled={refreshing}

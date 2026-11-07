@@ -232,6 +232,9 @@ export const api = {
     post<RawFeedback>(`/v1/feedback/${fid}/resolve`, { resolution, note }),
   datasetTag: (id: number, tag: "training" | "evaluation" | null) => post<{ dataset_tag: string | null }>(`/v1/copies/${id}/dataset-tag`, { tag }),
   rawCalibration: () => get<RawCalibration>(`/v1/raw-calibration`),
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  autoActions: () => get<{ categories: any[] }>(`/v1/auto-actions`),
+  restoreCopy: (id: number, note = "") => post<{ restored: boolean }>(`/v1/copies/${id}/restore`, { note }),
   getCondition: (id: number) => get<{ reviews: ConditionReview[]; issues: Record<string, Record<string, boolean>>; parts: Record<string, Record<string, boolean>> }>(`/v1/copies/${id}/condition`),
   postCondition: (id: number, body: { by: "user"; findings: ConditionFindings; photo_ok?: boolean; note?: string }) =>
     post<{ id: number; corners_clean: boolean; edges_clean: boolean }>(`/v1/copies/${id}/condition`, body),
