@@ -436,61 +436,135 @@ function NoticedTable({ d }: { d: CenteringAnalytics }) {
   );
 }
 
+const BINS = [0.5, 1, 1.5, 2, 2.5, 3, 5];
+const MIN_SEEN = 3; // observed colouring: fewer copies than this in a cell = no colour
+
+// a range of points off 50/50 as left/right shares: [1, 2.5) -> "51–52.5"
+const range = (lo: number, hi: number) => `${+(50 + lo).toFixed(1)}–${+(50 + hi).toFixed(1)}`;
+
+function wilson(k: number, n: number) {
+  const z = 1.645, p = k / n, den = 1 + (z * z) / n;
+  const mid = (p + (z * z) / (2 * n)) / den, half = (z * Math.sqrt((p * (1 - p)) / n + (z * z) / (4 * n * n))) / den;
+  return [Math.max(0, mid - half), Math.min(1, mid + half)];
+}
+
 function Heatmap({ d }: { d: CenteringAnalytics }) {
   const g = d.grid!;
   const classes = d.classes ?? [];
   const K = classes.length;
   const top = classes[K - 1];
+  const fine = g.step ?? 1;              // backend cell size (0.5 points; older API: 1)
+  const [bin, setBin] = useState(Math.max(1, fine));
+  const [mode, setMode] = useState<"model" | "seen">("model");
   const [hover, setHover] = useState<{ x: number; y: number } | null>(null);
-  const cell = 26;
-  const n = g.max + 1;
-  const pad = { l: 56, t: 8, b: 40 };
-  const W = pad.l + n * cell + 8, H = pad.t + n * cell + pad.b;
-  const h = hover ? g.cells[hover.y][hover.x] : null;
+
+  // merge the backend's fine cells into bins of `bin` points
+  const cells = useMemo(() => {
+    const per = Math.max(1, Math.round(bin / fine));
+    const nFine = g.cells.length;
+    const n = Math.ceil(nFine / per);
+    const out = Array.from({ length: n }, (_, y) => Array.from({ length: n }, (_, x) => {
+      const p = new Array(K).fill(0);
+      const obs: Record<string, number> = {};
+      let m = 0;
+      for (let fy = y * per; fy < Math.min(nFine, (y + 1) * per); fy++) {
+        for (let fx = x * per; fx < Math.min(nFine, (x + 1) * per); fx++) {
+          const c = g.cells[fy][fx];
+          c.p.forEach((v, i) => { p[i] += v; });
+          m++;
+          for (const [k, v] of Object.entries(c.observed)) obs[k] = (obs[k] ?? 0) + v;
+        }
+      }
+      const seen = Object.values(obs).reduce((a, b) => a + b, 0);
+      return { p: p.map((v) => v / m), obs, seen, top: obs[top] ?? 0, lo: x * per * fine, hi: Math.min(g.max, (x + 1) * per * fine), ylo: y * per * fine, yhi: Math.min(g.max, (y + 1) * per * fine) };
+    }));
+    return out;
+  }, [g, bin, fine, K, top]);
+
+  const n = cells.length;
+  const SIZE = 390;
+  const cell = SIZE / n;
+  const pad = { l: 64, t: 8, b: 40 };
+  const W = pad.l + SIZE + 24, H = pad.t + SIZE + pad.b;
+  const h = hover ? cells[hover.y]?.[hover.x] : null;
+  const sx = (pts: number) => pad.l + (pts / g.max) * SIZE;
+  const sy = (pts: number) => pad.t + (pts / g.max) * SIZE;
   return (
     <div className="bg-surface border border-border rounded p-4">
       <div className="text-xs font-semibold">Odds of {label(d.grader, top)} by front centering</div>
       <div className="text-[10px] text-muted mb-2">
-        listing scale · back held at {ratio(g.back_off_center.lr)} L/R, {ratio(g.back_off_center.tb)} T/B · dot = 5+ copies observed in that cell (the rest is the model filling in)
+        listing scale · back held at {ratio(g.back_off_center.lr)} L/R, {ratio(g.back_off_center.tb)} T/B ·{" "}
+        {mode === "model" ? "dot = 5+ copies observed in that cell (the rest is the model filling in)" : `colour = share of ${top} among the copies seen in that cell (blank under ${MIN_SEEN} copies)`}
+      </div>
+      <div className="flex flex-wrap items-center gap-4 text-xs mb-3">
+        <label className="flex items-center gap-2">
+          <span className="text-muted">cell width</span>
+          <input type="range" min={0} max={BINS.length - 1} step={1} value={Math.max(0, BINS.indexOf(bin))}
+            onChange={(e) => setBin(Math.max(fine, BINS[+e.target.value]))} aria-label="cell width in points" />
+          <span className="font-mono w-36 whitespace-nowrap">{bin} pt · 50–{+(50 + bin).toFixed(1)}</span>
+        </label>
+        <span className="flex items-center gap-1">
+          <span className="text-muted mr-1">colour by</span>
+          {(["model", "seen"] as const).map((m) => (
+            <button key={m} onClick={() => setMode(m)}
+              className={`px-2 py-0.5 rounded border text-[10px] ${mode === m ? "border-accent text-accent" : "border-border text-muted hover:text-[#e6edf3]"}`}>
+              {m === "model" ? "model odds" : "copies seen"}
+            </button>
+          ))}
+        </span>
       </div>
       <div className="flex flex-wrap gap-4 items-start">
         <svg width={W} height={H} role="img" aria-label={`Heatmap of ${top} odds over front left/right and top/bottom centering`} onMouseLeave={() => setHover(null)}>
-          {g.cells.map((row, y) => row.map((c, x) => {
-            const obs = Object.values(c.observed).reduce((a, b) => a + b, 0);
+          {cells.map((row, y) => row.map((c, x) => {
+            const show = mode === "model" || c.seen >= MIN_SEEN;
+            const v = mode === "model" ? c.p[K - 1] : c.seen ? c.top / c.seen : 0;
+            const sel = hover?.x === x && hover?.y === y;
             return (
               <g key={`${x}-${y}`} onMouseEnter={() => setHover({ x, y })}>
-                <rect x={pad.l + x * cell + 1} y={pad.t + y * cell + 1} width={cell - 2} height={cell - 2} rx={3}
-                  fill={rampColor(c.p[K - 1])} stroke={hover?.x === x && hover?.y === y ? "#e6edf3" : "none"} strokeWidth={1.5} />
-                {obs >= 5 && <circle cx={pad.l + x * cell + cell / 2} cy={pad.t + y * cell + cell / 2} r={2.5} fill={c.p[K - 1] < 0.45 ? "#e6edf3" : "#0d1117"} />}
+                <rect x={pad.l + x * cell + 1} y={pad.t + y * cell + 1} width={cell - 2} height={cell - 2} rx={Math.min(3, cell / 6)}
+                  fill={show ? rampColor(v) : "#0d1117"} stroke={sel ? "#e6edf3" : show ? "none" : "#30363d"} strokeWidth={sel ? 1.5 : 0.5} />
+                {mode === "model" && c.seen >= 5 && cell >= 10 && (
+                  <circle cx={pad.l + x * cell + cell / 2} cy={pad.t + y * cell + cell / 2} r={Math.min(2.5, cell / 6)} fill={v < 0.45 ? "#e6edf3" : "#0d1117"} />
+                )}
+                {mode === "seen" && c.seen > 0 && cell >= 26 && (
+                  <text x={pad.l + x * cell + cell / 2} y={pad.t + y * cell + cell / 2 + 3} textAnchor="middle" fontSize={9}
+                    fill={show && v >= 0.45 ? "#0d1117" : "#e6edf3"}>{c.seen}</text>
+                )}
               </g>
             );
           }))}
-          {Array.from({ length: n }, (_, i) => i).filter((i) => i % 5 === 0).map((i) => (
-            <g key={i} className="fill-[#8b949e]" fontSize={10}>
-              <text x={pad.l + i * cell + cell / 2} y={pad.t + n * cell + 14} textAnchor="middle">{ratio(i)}</text>
-              <text x={pad.l - 6} y={pad.t + i * cell + cell / 2 + 3} textAnchor="end">{ratio(i)}</text>
+          {[0, 5, 10, 15].map((pts) => (
+            <g key={pts} className="fill-[#8b949e]" fontSize={10}>
+              <text x={sx(pts)} y={pad.t + SIZE + 14} textAnchor="middle">{ratio(pts)}</text>
+              <text x={pad.l - 6} y={sy(pts) + 3} textAnchor="end">{ratio(pts)}</text>
             </g>
           ))}
-          <text x={pad.l + (n * cell) / 2} y={H - 4} textAnchor="middle" fontSize={10} className="fill-[#8b949e]">front left/right →</text>
+          <text x={pad.l + SIZE / 2} y={H - 4} textAnchor="middle" fontSize={10} className="fill-[#8b949e]">front left/right →</text>
         </svg>
-        <div className="space-y-3 text-xs min-w-56">
+        <div className="space-y-3 text-xs min-w-60">
           <div>
-            <div className="text-[10px] text-muted mb-1">{top} odds</div>
+            <div className="text-[10px] text-muted mb-1">{top} {mode === "model" ? "odds" : "share seen"}</div>
             <div className="flex">{RAMP.map((c) => <div key={c} className="w-4 h-3" style={{ background: c }} />)}</div>
             <div className="flex justify-between text-[10px] text-muted w-[208px]"><span>0%</span><span>100%</span></div>
-            <div className="text-[10px] text-muted mt-1">rows: front top/bottom ↓</div>
+            <div className="text-[10px] text-muted mt-1">rows: front top/bottom ↓ · axis labels mark the left (top) share</div>
           </div>
-          {h && hover ? (
+          {h ? (
             <div className="border border-border rounded p-2 space-y-1">
-              <div className="font-semibold">front {ratio(hover.x)} L/R · {ratio(hover.y)} T/B</div>
+              <div className="font-semibold">front L/R {range(h.lo, h.hi)} · T/B {range(h.ylo, h.yhi)}</div>
+              <div className="text-[10px] text-muted">model odds</div>
               {classes.map((c, i) => ({ c, p: h.p[i] })).reverse().map(({ c, p }) => (
                 <div key={c} className="flex justify-between gap-4"><span>{label(d.grader, c)}</span><span className="font-mono">{pct(p)}</span></div>
               ))}
               <div className="text-[10px] text-muted pt-1 border-t border-border">
-                observed here: {Object.keys(h.observed).length ? classes.slice().reverse().map((c) => `${h.observed[c] ?? 0} × ${c}`).join(" · ") : "none"}
+                {h.seen ? (
+                  <>
+                    seen here: {classes.slice().reverse().map((c) => `${h.obs[c] ?? 0} × ${c}`).join(" · ")}
+                    <br />{top} share {pct(h.top / h.seen)} (90%: {wilson(h.top, h.seen).map(pct).join("–")}) of {h.seen} copies
+                  </>
+                ) : "no copies seen here"}
               </div>
             </div>
-          ) : <div className="text-[10px] text-muted">hover a cell for every grade's odds and the copies seen there</div>}
+          ) : <div className="text-[10px] text-muted">hover a cell for every grade's odds and the copies seen there · widen the cells when a card has few copies</div>}
         </div>
       </div>
     </div>
