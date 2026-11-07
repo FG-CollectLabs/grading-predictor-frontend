@@ -270,6 +270,26 @@ export default function CopyReview() {
     [copyId, loadCopy],
   );
 
+  // turn a stored photo the automatic turn missed (stored as your own photo;
+  // the centering engine measures it again)
+  const rotate = useCallback(
+    async (side: "front" | "back", degrees: 90 | 180 | 270) => {
+      setUploading(side);
+      setError(null);
+      try {
+        await api.rotatePhoto(copyId, side, degrees);
+        await loadCopy();
+        await api.postStep(copyId, { step: "photos", decision: "fixed", tags: [], payload: { rotated: side, degrees } })
+          .then(setSteps).catch(() => undefined);
+      } catch (e) {
+        setError(String(e));
+      } finally {
+        setUploading(null);
+      }
+    },
+    [copyId, loadCopy],
+  );
+
   // A better catalog image for this card (shared by every copy of it):
   // shrunk in the browser to 1600 px on the long side, JPEG 92%, so the
   // stored image is a sensible size; copies the AI couldn't confirm against
@@ -579,8 +599,10 @@ export default function CopyReview() {
                   : [{ label: "Photos are right → front centering", primary: true, onClick: () => record("photos", "approved") }]
               } />
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <Chosen side="front" view={frontView} onUpload={(f) => upload("front", f)} uploading={uploading === "front"} />
-                <Chosen side="back" view={backView} onUpload={(f) => upload("back", f)} uploading={uploading === "back"} />
+                <Chosen side="front" view={frontView} onUpload={(f) => upload("front", f)} uploading={uploading === "front"}
+                  onRotate={copy.front_image && !frontView.pending ? (d) => rotate("front", d) : undefined} />
+                <Chosen side="back" view={backView} onUpload={(f) => upload("back", f)} uploading={uploading === "back"}
+                  onRotate={copy.back_image && !backView.pending ? (d) => rotate("back", d) : undefined} />
               </div>
               {copy.photos.length > 0 && (
                 <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 xl:grid-cols-8 gap-2">
@@ -975,8 +997,8 @@ export function certLookupUrl(grader: string, cert: string): string | null {
   }
 }
 
-function Chosen({ side, view, onUpload, uploading }: {
-  side: string; view: View; onUpload: (f: File) => void; uploading: boolean;
+function Chosen({ side, view, onUpload, uploading, onRotate }: {
+  side: string; view: View; onUpload: (f: File) => void; uploading: boolean; onRotate?: (deg: 90 | 180 | 270) => void;
 }) {
   const drop = useDrop(onUpload);
   return (
@@ -992,6 +1014,15 @@ function Chosen({ side, view, onUpload, uploading }: {
       ) : (
         <div className="aspect-[5/7] max-h-[60vh] bg-bg border border-dashed border-border rounded flex items-center justify-center text-xs text-muted">
           pick a listing photo below, or drop your own
+        </div>
+      )}
+      {onRotate && (
+        <div className="flex items-center gap-1 mt-1 text-[10px] text-muted">
+          <span>turn photo:</span>
+          {([[270, "↺ 90°"], [90, "↻ 90°"], [180, "180°"]] as const).map(([d, t]) => (
+            <button key={d} disabled={uploading} onClick={() => onRotate(d)}
+              className="border border-border rounded px-1.5 py-0.5 hover:text-accent hover:border-accent/50 disabled:opacity-40">{t}</button>
+          ))}
         </div>
       )}
       <UploadLabel text={`or drop, paste or choose your own ${side} photo`} uploading={uploading} onUpload={onUpload} />
