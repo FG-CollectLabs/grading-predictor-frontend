@@ -126,7 +126,8 @@ function Row({ c: initial, onDone }: { c: CopyRow; onDone: () => void }) {
         onDone();
       }
     } catch (e) {
-      setErr(String(e));
+      const m = /scan is for cert (\d+)/.exec(String(e));
+      setErr(m ? `That scan belongs to cert ${m[1]}, not this copy's ${c.cert_number}: the cert page you dragged from is still showing an earlier slab. Click "${c.grader} cert page" on this row and drag from that page.` : String(e));
     } finally {
       setBusy(null);
     }
@@ -166,7 +167,8 @@ function Row({ c: initial, onDone }: { c: CopyRow; onDone: () => void }) {
         </div>
         <div className="flex flex-wrap gap-3">
           {lookup ? (
-            <a href={lookup} target="_blank" rel="noreferrer" className="text-accent hover:underline font-semibold">{c.grader} cert page ↗</a>
+            <a href={lookup} target="fg-grader-cert" title="opens in the same tab every time: move it next to this page once"
+              className="text-accent hover:underline font-semibold">{c.grader} cert page ↗</a>
           ) : (
             <span className="text-muted">{c.cert_number ? `no cert page link for ${c.grader}` : "no cert to look up"}</span>
           )}
