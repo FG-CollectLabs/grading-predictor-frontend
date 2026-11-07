@@ -39,7 +39,16 @@ const TRIAGE: Opt[] = [
   { value: "none", label: "No feed photos" },
 ];
 const GRADERS: Opt[] = [{ value: "", label: "Any grader" }, ...["PSA", "CGC", "PCG", "BGS", "TAG", "SGC"].map((g) => ({ value: g, label: g }))];
-const GRADES: Opt[] = [{ value: "", label: "Any grade" }, ...["10", "9.5", "9", "8.5", "8"].map((g) => ({ value: g, label: g }))];
+// grade + label (CGC Pristine, BGS Black Label, PCG Flawless are 10s with a label)
+const GRADES: Opt[] = [
+  { value: "", label: "Any grade" },
+  { value: "10", label: "10 (all)" },
+  { value: "10|none", label: "10 (plain)" },
+  { value: "10|pristine", label: "10 Pristine" },
+  { value: "10|black_label", label: "10 Black Label" },
+  { value: "10|flawless", label: "10 Flawless" },
+  ...["9.5", "9", "8.5", "8"].map((g) => ({ value: g, label: g })),
+];
 const LANGS: Opt[] = [
   { value: "", label: "Any language" },
   { value: "en", label: "English" },
@@ -206,7 +215,15 @@ export default function Copies() {
         <div className="flex flex-wrap gap-2 items-center">
           <Select opts={TRIAGE} value={params.get("triage") ?? ""} onChange={(v) => set("triage", v)} />
           <Select opts={GRADERS} value={params.get("grader") ?? ""} onChange={(v) => set("grader", v)} />
-          <Select opts={GRADES} value={params.get("grade") ?? ""} onChange={(v) => set("grade", v)} />
+          <Select opts={GRADES} value={[params.get("grade") ?? "", params.get("label") ?? ""].filter(Boolean).join("|")}
+            onChange={(v) => {
+              const [g, l] = v.split("|");
+              const p = new URLSearchParams(params);
+              if (g) p.set("grade", g); else p.delete("grade");
+              if (l) p.set("label", l); else p.delete("label");
+              p.delete("offset");
+              setParams(p);
+            }} />
           <Select opts={LANGS} value={params.get("language") ?? ""} onChange={(v) => set("language", v)} />
           <form
             onSubmit={(e) => {
