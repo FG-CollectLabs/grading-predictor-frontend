@@ -27,6 +27,8 @@ const STEPS: Step[] = [
   { id: "corners", n: "6", title: "Corners", soon: true },
   { id: "edges", n: "7", title: "Edges", soon: true },
 ];
+// steps a raw copy skips (no slab, no listing grade, no cert)
+const RAW_SKIP = new Set<StepId>(["card", "listing", "cert", "photos"]);
 const REQUIRED: StepId[] = ["card", "listing", "cert", "photos", "front_outer", "front_inner", "back_outer", "back_inner"];
 
 const DECISION_STYLE: Record<StepDecision, { icon: string; cls: string; label: string }> = {
@@ -80,8 +82,10 @@ export default function CopyReview() {
         const done = new Set(s.steps.map((x) => x.step));
         // open at the first step that needs a person (not decided, machine not sure)
         const station = new URLSearchParams(window.location.hash.split("?")[1] ?? "").get("station");
-        const open = (station && REQUIRED.find((x) => !done.has(x) && STEP_STATION[x] === station))
-          || REQUIRED.find((x) => !done.has(x) && c.stations?.[STEP_STATION[x]] !== "high");
+        // a raw copy (sent for grade odds) has no slab: only the measuring steps apply
+        const req = c.grader === "Raw" ? REQUIRED.filter((x) => !RAW_SKIP.has(x)) : REQUIRED;
+        const open = (station && req.find((x) => !done.has(x) && STEP_STATION[x] === station))
+          || req.find((x) => !done.has(x) && (c.grader === "Raw" || c.stations?.[STEP_STATION[x]] !== "high"));
         setActive(open ?? REQUIRED.find((x) => !done.has(x)) ?? "back_inner");
       })
       .catch((e: unknown) => setError(String(e)));
@@ -374,7 +378,8 @@ export default function CopyReview() {
         {/* ── the line ──────────────────────────────────────────────────── */}
         <div className="space-y-3">
           <div className="bg-surface border border-border rounded-md p-2">
-            {STEPS.map((s) => {
+            {copy.grader === "Raw" && <RawBought copy={copy} onChange={loadCopy} />}
+            {STEPS.filter((s) => !(copy.grader === "Raw" && RAW_SKIP.has(s.id))).map((s) => {
               const d = decided.get(s.id);
               const st = d ? DECISION_STYLE[d.decision] : null;
               const disabled = s.soon || (rejectedEarly && !["card", "listing"].includes(s.id));
@@ -1070,4 +1075,36 @@ async function shrinkImage(file: File, maxSide: number): Promise<File> {
   canvas.getContext("2d")!.drawImage(bmp, 0, 0, canvas.width, canvas.height);
   const blob = await new Promise<Blob | null>((r) => canvas.toBlob(r, "image/jpeg", 0.92));
   return blob ? new File([blob], "catalog.jpg", { type: "image/jpeg" }) : file;
+}
+
+// a raw copy (sent for grade odds): bought or not, and what it cost
+function RawBought({ copy, onChange }: { copy: CopyDetail; onChange: () => unknown }) {
+  const [price, setPrice] = useState(copy.bought_price_cents != null ? String(copy.bought_price_cents / 100) : "");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const save = async (bought: boolean) => {
+    setBusy(true);
+    setErr(null);
+    try {
+      const cents = price.trim() === "" ? undefined : Math.round(parseFloat(price) * 100);
+      await api.markBought(copy.id, bought, Number.isFinite(cents) ? cents : undefined);
+      await onChange();
+    } catch (e) {
+      setErr(String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="mb-2 p-2 rounded border border-border text-[11px] space-y-1">
+      <div className="text-muted">Raw copy (no slab): only the measuring steps apply. <Link to="/factory/raw" className="text-accent hover:underline">all raw copies</Link></div>
+      <div className="flex items-center gap-1">
+        <span className={copy.bought_at ? "text-green" : "text-muted"}>{copy.bought_at ? `bought ${new Date(copy.bought_at).toLocaleDateString()}` : "not bought"}</span>
+        <input value={price} onChange={(e) => setPrice(e.target.value)} placeholder="price $" className="w-16 bg-bg border border-border rounded px-1 py-0.5 ml-auto" />
+        <button disabled={busy} onClick={() => save(true)} className="border border-border rounded px-1.5 py-0.5 hover:text-accent">{copy.bought_at ? "update" : "mark bought"}</button>
+        {copy.bought_at && <button disabled={busy} onClick={() => save(false)} className="border border-border rounded px-1.5 py-0.5 text-muted hover:text-red-400">undo</button>}
+      </div>
+      {err && <div className="text-red-400">{err}</div>}
+    </div>
+  );
 }

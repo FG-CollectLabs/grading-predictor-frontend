@@ -57,6 +57,7 @@ export default function Factory() {
         <h1 className="text-lg font-semibold">Pre-grading factory</h1>
         <span className="text-xs text-muted">
           {n(needsYou)} station checks need you · <Link to="/factory/history" className="text-accent hover:underline">my review history →</Link>
+          {" · "}<Link to="/factory/raw" className="text-accent hover:underline">raw copies (tracker) →</Link>
           {asOf && <> · numbers as of {asOf} (refreshed every few minutes; links show exact lists)</>}
         </span>
         <button onClick={refresh} disabled={refreshing}
