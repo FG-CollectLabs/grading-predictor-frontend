@@ -225,6 +225,8 @@ export const api = {
   reviewCopy: (id: number, req: ReviewRequest) => post<CopyDetail>(`/v1/copies/${id}/review`, req),
   gradeCorrection: (id: number, g: { grader: string; grade: number; grade_label: string; note: string }) =>
     post<ReviewSteps>(`/v1/copies/${id}/grade-correction`, g),
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  reviewPriority: (fresh = false) => get<{ as_of: string; report: any }>(`/v1/review-priority${fresh ? "?fresh=1" : ""}`),
   listFeedback: (p: URLSearchParams) => getAuthed<{ feedback: RawFeedback[] }>(`/v1/feedback?${p.toString()}`),
   resolveFeedback: (fid: number, resolution: string, note = "") =>
     post<RawFeedback>(`/v1/feedback/${fid}/resolve`, { resolution, note }),
