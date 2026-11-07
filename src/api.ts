@@ -1,5 +1,5 @@
 import type {
-  CenteringAnalytics, CenteringOdds, CardHit, SettingValue, RawFeedback, RawCalibration,
+  CenteringAnalytics, CenteringOdds, CardHit, SettingValue, RawFeedback, RawCalibration, ConditionReview, ConditionFindings,
   Card,
   CardDetail,
   CertRow,
@@ -232,6 +232,10 @@ export const api = {
     post<RawFeedback>(`/v1/feedback/${fid}/resolve`, { resolution, note }),
   datasetTag: (id: number, tag: "training" | "evaluation" | null) => post<{ dataset_tag: string | null }>(`/v1/copies/${id}/dataset-tag`, { tag }),
   rawCalibration: () => get<RawCalibration>(`/v1/raw-calibration`),
+  getCondition: (id: number) => get<{ reviews: ConditionReview[]; issues: Record<string, Record<string, boolean>>; parts: Record<string, Record<string, boolean>> }>(`/v1/copies/${id}/condition`),
+  postCondition: (id: number, body: { by: "user"; findings: ConditionFindings; photo_ok?: boolean; note?: string }) =>
+    post<{ id: number; corners_clean: boolean; edges_clean: boolean }>(`/v1/copies/${id}/condition`, body),
+  inspectUrl: (id: number, side: "front" | "back", v: number | string = "") => `${BASE}/v1/copies/${id}/inspect/${side}.jpg?v=${v}`,
   markBought: (id: number, bought: boolean, priceCents?: number) =>
     post<CopyDetail>(`/v1/copies/${id}/bought`, { bought, price_cents: priceCents }),
   rotatePhoto: (id: number, side: "front" | "back", degrees: 90 | 180 | 270) =>
