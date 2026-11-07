@@ -171,20 +171,27 @@ function WhatIf({ cardId, cardName }: { cardId: string; cardName?: string }) {
     <div className="bg-surface border border-border rounded p-4 space-y-3">
       <div className="text-xs font-semibold">
         What are the odds{cardName ? <> for this <span className="text-accent">{cardName}</span></> : ""}?{" "}
-        <span className="font-normal text-muted">type the left (or top) share, e.g. 55 for 55/45{cardName ? "" : " · pick a card above to use how that card grades"}</span>
+        <span className="font-normal text-muted">slide each axis to the centering you see{cardName ? "" : " · pick a card above to use how that card grades"}</span>
       </div>
       <div className="flex flex-wrap items-end gap-3 text-xs">
-        {AXES.map((a) => (
-          <label key={a.key} className="flex flex-col gap-1">
-            <span className="text-muted">{a.label}</span>
-            <span className="flex items-center gap-1">
-              <input type="number" min={0} max={100} step={0.5} value={v[a.key]}
+        {AXES.map((a, i) => {
+          const val = v[a.key] === "" ? 50 : +v[a.key];
+          const lim = i < 2 ? 15 : 30;            // front 65/35 .. 35/65, back 80/20 .. 20/80
+          return (
+            <label key={a.key} className="flex flex-col gap-1 w-56">
+              <span className="flex justify-between">
+                <span className="text-muted">{a.label}</span>
+                <span className="font-mono">{+val.toFixed(1)}/{+(100 - val).toFixed(1)}</span>
+              </span>
+              <input type="range" min={50 - lim} max={50 + lim} step={0.5} value={val}
                 onChange={(e) => setV({ ...v, [a.key]: e.target.value })}
-                className="w-16 bg-bg border border-border rounded px-1 py-0.5 font-mono" aria-label={`${a.label} left or top percent`} />
-              <span className="text-muted font-mono">/{v[a.key] === "" ? "" : (100 - +v[a.key]).toString()}</span>
-            </span>
-          </label>
-        ))}
+                aria-label={`${a.label}: left or top share`} />
+              <span className="flex justify-between text-[9px] text-muted font-mono">
+                <span>{50 - lim}/{50 + lim}</span><span>50/50</span><span>{50 + lim}/{50 - lim}</span>
+              </span>
+            </label>
+          );
+        })}
       </div>
       {err && <div className="text-xs text-red-400">{err}</div>}
       {res && !res.predictions?.length && <div className="text-xs text-muted">No grader has enough measured copies yet.</div>}
