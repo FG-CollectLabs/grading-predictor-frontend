@@ -257,6 +257,8 @@ export interface CopyRow {
   updated_at: string;
   front_centering: CenteringBrief | null;
   back_centering: CenteringBrief | null;
+  bought_at?: string | null;          // raw copies: when it was bought
+  bought_price_cents?: number | null;
 }
 
 export interface CopyList {
