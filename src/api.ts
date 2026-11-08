@@ -39,7 +39,17 @@ import type {
 } from "./types";
 
 const BASE = import.meta.env.VITE_API_URL ?? "http://localhost:8084";
-const TOKEN = import.meta.env.VITE_API_TOKEN ?? "";
+// The admin token is entered once per browser (Settings → API token) and kept
+// in localStorage; it is no longer built into the site, which anyone can read.
+// VITE_API_TOKEN is a fallback only while the old build secret still exists.
+const BUILD_TOKEN = import.meta.env.VITE_API_TOKEN ?? "";
+const TOKEN_KEY = "gp_api_token";
+export function getToken(): string {
+  try { return localStorage.getItem(TOKEN_KEY) || BUILD_TOKEN; } catch { return BUILD_TOKEN; }
+}
+export function setToken(t: string) {
+  try { if (t) localStorage.setItem(TOKEN_KEY, t); else localStorage.removeItem(TOKEN_KEY); } catch { /* storage blocked */ }
+}
 const MARKET_BASE = import.meta.env.VITE_MARKET_API_URL ?? "https://market.futuregadgetlabs.com";
 
 /** URL of a stored photo (a path under the API's image directory). */
@@ -49,11 +59,14 @@ export function imageUrl(path: string): string {
 }
 
 function authHeaders(): HeadersInit {
-  return TOKEN ? { Authorization: `Bearer ${TOKEN}` } : {};
+  const t = getToken();
+  return t ? { Authorization: `Bearer ${t}` } : {};
 }
 
+// every GET carries the token when there is one: in-hand scans (private
+// copies) are only shown to a token holder
 async function get<T>(path: string): Promise<T> {
-  const res = await fetch(`${BASE}${path}`);
+  const res = await fetch(`${BASE}${path}`, { headers: authHeaders() });
   if (!res.ok) throw new Error(`GET ${path}: ${res.status}`);
   return res.json() as Promise<T>;
 }

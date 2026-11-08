@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { api } from "../api";
+import { api, getToken, setToken } from "../api";
 import type { Setting, SettingValue } from "../types";
 
 // Operating settings (backend internal/predictor/settings.go): AI job sizes,
@@ -64,6 +64,7 @@ export default function Settings() {
     <div className="max-w-4xl space-y-6">
       <div>
         <h1 className="text-lg font-semibold">Settings</h1>
+        <TokenBox />
         <p className="text-muted text-xs mt-1">
           Operating knobs that used to be env vars and cron flags. A setting left at its default follows the env var
           (shown as the default). Changes apply on the next run of whatever reads them.
@@ -172,5 +173,24 @@ function IdsInput({ value, bad, onChange }: { value: number[]; bad: boolean; onC
         onChange(parse(e.target.value));
       }}
       className={`w-40 bg-bg border rounded px-2 py-1 text-xs ${bad ? "border-red-400" : "border-border"}`} />
+  );
+}
+
+// the admin token for this browser (kept in localStorage, never in the build)
+function TokenBox() {
+  const [v, setV] = useState("");
+  const [has, setHas] = useState(() => !!getToken());
+  const [msg, setMsg] = useState<string | null>(null);
+  const save = (t: string) => { setToken(t.trim()); setHas(!!getToken()); setV(""); setMsg(t ? "saved for this browser" : "removed"); };
+  return (
+    <div className="mt-2 mb-3 bg-surface border border-border rounded p-2 text-xs flex flex-wrap items-center gap-2">
+      <span className="font-semibold">API token</span>
+      <span className={has ? "text-green" : "text-yellow"}>{has ? "set" : "not set: saving, review and in-hand scans need it"}</span>
+      <input type="password" value={v} onChange={(e) => setV(e.target.value)} placeholder="paste ADMIN_API_TOKEN"
+        className="bg-bg border border-border rounded px-2 py-1 outline-none focus:border-accent w-72" />
+      <button disabled={!v.trim()} onClick={() => save(v)} className="border border-accent/40 text-accent rounded px-2 py-1 disabled:opacity-40">save</button>
+      {has && <button onClick={() => save("")} className="border border-border text-muted rounded px-2 py-1">remove</button>}
+      {msg && <span className="text-muted">{msg}</span>}
+    </div>
   );
 }
