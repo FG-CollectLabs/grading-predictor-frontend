@@ -537,6 +537,13 @@ export interface PredictSide {
 export interface GradeOutcome { grade: string; p: number; prior: number; n_eff?: number; copies: number; in_bucket?: number }
 export interface GraderPrediction {
   grader: string; model?: string; outcomes: GradeOutcome[]; prior_source: string; centering_cap?: string; note?: string;
+  basis?: OddsBasis; population_p?: number; explain?: OddsExplain;
+}
+// where a card's grade levels come from (backend levelSteps): narrowest group with enough trusted copies
+export interface OddsBasis { scope: "card" | "set_rarity" | "set" | "era_rarity" | "era" | "all"; label: string; reviewed: number; measured: number; evidence: number }
+export interface OddsExplain {
+  top: string; summary: string; percentile?: number; percentile_of?: string;
+  axes: { axis: string; measured: string; effect_pp: number; typical?: string; note?: string }[];
 }
 export type OffCenter = { front_lr: number; front_tb: number; back_lr: number; back_tb: number };
 export interface CenteringBacktest {
@@ -577,6 +584,7 @@ export interface Prediction {
   centering: Partial<Record<"front" | "back", PredictSide>>;
   worse_side?: { front: number; back: number }; off_center?: OffCenter;
   predictions?: GraderPrediction[]; comparables?: Record<string, number>; caveats: string[];
+  snapshot?: { id: number; version: number; model_version: string; created_at: string };
 }
 
 export interface TemplateTask {

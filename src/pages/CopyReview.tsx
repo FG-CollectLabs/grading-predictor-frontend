@@ -4,6 +4,7 @@ import { api, imageUrl } from "../api";
 import type { CenteringMeasurement, CopyDetail, CopyList, CopyPhoto, ReviewSteps, StepDecision, StepId } from "../types";
 import CenteringEditor from "../components/CenteringEditor";
 import ConditionStep from "../components/ConditionStep";
+import CopyOdds from "../components/CopyOdds";
 import { FLAG_LABELS, StatusBadge, gradeText } from "./Copies";
 
 // Pre-grading review of one copy, step by step, in the factory's order:
@@ -341,6 +342,8 @@ export default function CopyReview() {
   const frontView = viewFor("front", copy.front_image, photoAt(front), frontChanged || (!copy.front_image && front !== null));
   const backView = viewFor("back", copy.back_image, photoAt(back), backChanged || (!copy.back_image && back !== null));
   const photosPending = t?.status === "pending" || t?.status === "working";
+  // the odds follow the outlines: refetch whenever a step is decided or the measurements change
+  const oddsKey = `${centering.map((m) => `${m.id}:${m.status}`).join(",")}|${steps?.events?.length ?? 0}`;
 
   return (
     <div>
@@ -439,6 +442,7 @@ export default function CopyReview() {
               )}
             </div>
           </div>
+          <CopyOdds copyId={copy.id} refreshKey={oddsKey} />
           <History steps={steps} />
         </div>
 
