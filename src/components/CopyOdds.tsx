@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { api } from "../api";
 import type { GraderPrediction, OddsBasis, Prediction } from "../types";
 
@@ -92,6 +93,19 @@ export default function CopyOdds({ copyId, refreshKey }: { copyId: number; refre
             )}
           </div>
         ))}
+      {p?.delta && (
+        <div className="text-[10px] border-t border-border pt-1">
+          <span className="text-muted">in-hand scan of </span>
+          <Link to={`/copies/${p.delta.of_copy}`} className="text-accent hover:underline">listing #{p.delta.of_copy}</Link>
+          {p.delta.centering ? (
+            <span className="text-muted"> · listing → scan, pts off: {Object.entries(p.delta.centering).filter(([, v]) => Math.abs(v.error) >= 1).map(([k, v]) => `${AXIS[k] ?? k} ${v.listing}→${v.scan}`).join(" · ") || "within 1 pt"}
+              {p.delta.psa10 && ` · PSA 10 ${pct(p.delta.psa10.listing)}→${pct(p.delta.psa10.scan)}`}</span>
+          ) : <span className="text-muted"> · {p.delta.note}</span>}
+        </div>
+      )}
+      {p?.photo_error?.applied && (
+        <div className="text-[10px] text-muted">odds spread over {p.photo_error.basis} listing-photo error (±{Math.max(...p.photo_error.sigma_pp).toFixed(1)} pts, {p.photo_error.pairs} scans)</div>
+      )}
       {p?.status === "ready" && <div className="text-[10px] text-muted">From the current outlines (yours win over the engine's). Corners/edges/surface beyond the corner check are assumed clean.</div>}
     </div>
   );
