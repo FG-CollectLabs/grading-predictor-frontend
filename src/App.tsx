@@ -21,6 +21,7 @@ import CardAnalytics from "./pages/analytics/CardAnalytics";
 import Settings from "./pages/Settings";
 import Developer from "./pages/Developer";
 import GraderAnalytics from "./pages/GraderAnalytics";
+import PhotoError from "./pages/PhotoError";
 
 // Tabs: Analytics (cards and their copies), Pre-grading factory (the pipeline
 // and its review queues), Grader analytics (centering vs grade odds), Developer (architecture).
@@ -108,6 +109,7 @@ export default function App() {
             <Route path="/copies" element={<Copies />} />
             <Route path="/copies/:id" element={<CopyReview />} />
             <Route path="/grader-analytics" element={<GraderAnalytics />} />
+            <Route path="/grader-analytics/photo-error" element={<PhotoError />} />
             <Route path="/developer" element={<Developer />} />
             <Route path="/settings" element={<Settings />} />
           </Routes>

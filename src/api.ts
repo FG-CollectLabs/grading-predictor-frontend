@@ -185,6 +185,7 @@ export const api = {
   searchCards: (q: string) => get<{ cards: CardHit[] }>(`/v1/analytics/card-search?q=${encodeURIComponent(q)}`),
   getCenteringOdds: (p: URLSearchParams) => get<CenteringOdds>(`/v1/analytics/centering/odds?${p.toString()}`),
   getPrediction: (copyId: number) => get<Prediction>(`/v1/predict/${copyId}`),
+  getPhotoError: () => get<{ groups: { source: string; pairs: number; axes: Record<string, { n: number; bias: number; mae: number; rmse: number }>; corners: { n: number; bias: number; mae: number; rmse: number } | null }[]; recent: { scan_copy_id: number; listing_copy_id: number; source: string; error_pp: Record<string, number>; at: string }[] | null; min_pairs: number; notes: string[] }>("/v1/analytics/photo-error"),
   predict: async (cardId: number, front: File, back: File) => {
     const form = new FormData();
     form.append("card_id", String(cardId));

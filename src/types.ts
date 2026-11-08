@@ -585,6 +585,13 @@ export interface Prediction {
   worse_side?: { front: number; back: number }; off_center?: OffCenter;
   predictions?: GraderPrediction[]; comparables?: Record<string, number>; caveats: string[];
   snapshot?: { id: number; version: number; model_version: string; created_at: string };
+  // an in-hand scan (backend remeasure.go): the listing copy it re-measures, listing vs scan
+  delta?: {
+    of_copy: number; listing_status: string; listing_photo_source?: string; note?: string;
+    centering?: Record<string, { listing: number; scan: number; error: number }>;
+    psa10?: { listing: number; scan: number; error: number };
+  };
+  photo_error?: { source: string; basis: string; pairs: number; sigma_pp: number[]; applied: boolean; note?: string };
 }
 
 export interface TemplateTask {
