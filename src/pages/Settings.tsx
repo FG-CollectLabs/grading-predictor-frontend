@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { api, getToken, setToken } from "../api";
+import { api, checkToken, cleanToken, getToken, setToken } from "../api";
 import type { Setting, SettingValue } from "../types";
 
 // Operating settings (backend internal/predictor/settings.go): AI job sizes,
@@ -176,20 +176,37 @@ function IdsInput({ value, bad, onChange }: { value: number[]; bad: boolean; onC
   );
 }
 
-// the admin token for this browser (kept in localStorage, never in the build)
+// the admin token for this browser (kept in localStorage, never in the build);
+// checked against the API on load and before saving
 function TokenBox() {
   const [v, setV] = useState("");
-  const [has, setHas] = useState(() => !!getToken());
+  const [state, setState] = useState<"none" | "checking" | "ok" | "bad" | "unknown">(() => (getToken() ? "checking" : "none"));
   const [msg, setMsg] = useState<string | null>(null);
-  const save = (t: string) => { setToken(t.trim()); setHas(!!getToken()); setV(""); setMsg(t ? "saved for this browser" : "removed"); };
+  useEffect(() => {
+    const t = getToken();
+    if (t) checkToken(t).then((ok) => setState(ok === true ? "ok" : ok === false ? "bad" : "unknown"));
+  }, []);
+  const save = async () => {
+    const t = cleanToken(v);
+    if (!t) return;
+    setState("checking");
+    const ok = await checkToken(t);
+    if (ok === false) { setState(getToken() ? "bad" : "none"); setMsg("the API rejected that token: not saved (paste the ADMIN_API_TOKEN value from 109)"); return; }
+    setToken(t); setV(""); setState(ok ? "ok" : "unknown");
+    setMsg(ok ? "saved and accepted by the API" : "saved (couldn't reach the API to check)");
+  };
+  const remove = () => { setToken(""); setState("none"); setMsg("removed"); };
+  const label = { none: ["text-yellow", "not set: saving, review and in-hand scans need it"], checking: ["text-muted", "checking…"],
+    ok: ["text-green", "set and accepted"], bad: ["text-red-400", "set but rejected by the API: paste the current token"],
+    unknown: ["text-muted", "set (couldn't check)"] }[state];
   return (
     <div className="mt-2 mb-3 bg-surface border border-border rounded p-2 text-xs flex flex-wrap items-center gap-2">
       <span className="font-semibold">API token</span>
-      <span className={has ? "text-green" : "text-yellow"}>{has ? "set" : "not set: saving, review and in-hand scans need it"}</span>
-      <input type="password" value={v} onChange={(e) => setV(e.target.value)} placeholder="paste ADMIN_API_TOKEN"
-        className="bg-bg border border-border rounded px-2 py-1 outline-none focus:border-accent w-72" />
-      <button disabled={!v.trim()} onClick={() => save(v)} className="border border-accent/40 text-accent rounded px-2 py-1 disabled:opacity-40">save</button>
-      {has && <button onClick={() => save("")} className="border border-border text-muted rounded px-2 py-1">remove</button>}
+      <span className={label[0]}>{label[1]}</span>
+      <input type="password" value={v} onChange={(e) => setV(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") void save(); }}
+        placeholder="paste ADMIN_API_TOKEN" className="bg-bg border border-border rounded px-2 py-1 outline-none focus:border-accent w-72" />
+      <button disabled={!v.trim() || state === "checking"} onClick={() => void save()} className="border border-accent/40 text-accent rounded px-2 py-1 disabled:opacity-40">save</button>
+      {state !== "none" && <button onClick={remove} className="border border-border text-muted rounded px-2 py-1">remove</button>}
       {msg && <span className="text-muted">{msg}</span>}
     </div>
   );
