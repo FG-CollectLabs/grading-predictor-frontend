@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
-import { api, imageUrl } from "../api";
+import { api, getToken, imageUrl } from "../api";
 import type { CenteringMeasurement, CopyDetail, CopyList, CopyPhoto, ReviewSteps, StepDecision, StepId } from "../types";
 import CenteringEditor from "../components/CenteringEditor";
 import ConditionStep from "../components/ConditionStep";
@@ -329,6 +329,23 @@ export default function CopyReview() {
   }, [goNext]);
 
   if (error && !copy) return <div className="text-red-400 py-12 text-center">{error}</div>;
+  if ((!copy || !steps) && error) {
+    // in-hand scans are private: without an accepted token the API answers 404
+    const missing = / 404\b/.test(error);
+    return (
+      <div className="py-12 text-center text-sm space-y-2">
+        <div className="text-red-400">{missing ? `Copy #${copyId} not found.` : error}</div>
+        {missing && (
+          <div className="text-xs text-muted max-w-md mx-auto">
+            {getToken()
+              ? "If it's one of our in-hand scans, the API token saved in this browser isn't accepted. "
+              : "If it's one of our in-hand scans, it's private: this browser has no API token saved. "}
+            <Link to="/settings" className="text-accent hover:underline">Settings → API token</Link>
+          </div>
+        )}
+      </div>
+    );
+  }
   if (!copy || !steps) return <div className="text-muted py-12 text-center">Loading…</div>;
 
   const t = copy.triage;
