@@ -45,10 +45,28 @@ const BASE = import.meta.env.VITE_API_URL ?? "http://localhost:8084";
 const BUILD_TOKEN = import.meta.env.VITE_API_TOKEN ?? "";
 const TOKEN_KEY = "gp_api_token";
 export function getToken(): string {
-  try { return localStorage.getItem(TOKEN_KEY) || BUILD_TOKEN; } catch { return BUILD_TOKEN; }
+  try { return cleanToken(localStorage.getItem(TOKEN_KEY) || "") || BUILD_TOKEN; } catch { return BUILD_TOKEN; }
 }
 export function setToken(t: string) {
   try { if (t) localStorage.setItem(TOKEN_KEY, t); else localStorage.removeItem(TOKEN_KEY); } catch { /* storage blocked */ }
+}
+// a pasted token, cleaned: a whole env line ("ADMIN_API_TOKEN=..."), quotes,
+// "Bearer " and whitespace are all stripped
+export function cleanToken(raw: string): string {
+  return raw.trim().replace(/^export\s+/, "").replace(/^[A-Z_]+=/, "").replace(/^Bearer\s+/i, "").replace(/^["']|["']$/g, "").trim();
+}
+// does the API accept this token? (an auth-only read)
+export async function checkToken(t: string): Promise<boolean | null> {
+  try {
+    const res = await fetch(`${BASE}/v1/predict/changed?since=${encodeURIComponent(new Date().toISOString().slice(0, 19) + "Z")}&limit=1`,
+      { headers: { Authorization: `Bearer ${t}` } });
+    return res.status === 401 ? false : res.ok ? true : null;
+  } catch { return null; }
+}
+// what a failed write says: a rejected token points at Settings
+function apiError(status: number, err: unknown, fallback: string): Error {
+  if (status === 401) return new Error("API token missing or not accepted: paste ADMIN_API_TOKEN under Settings → API token");
+  return new Error((err as { message?: string }).message ?? fallback);
 }
 const MARKET_BASE = import.meta.env.VITE_MARKET_API_URL ?? "https://market.futuregadgetlabs.com";
 
@@ -86,7 +104,7 @@ async function post<T>(path: string, body: unknown): Promise<T> {
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error((err as { message?: string }).message ?? `POST ${path}: ${res.status}`);
+    throw apiError(res.status, err, `POST ${path}: ${res.status}`);
   }
   return res.json() as Promise<T>;
 }
@@ -99,7 +117,7 @@ async function patch<T>(path: string, body: unknown): Promise<T> {
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error((err as { message?: string }).message ?? `PATCH ${path}: ${res.status}`);
+    throw apiError(res.status, err, `PATCH ${path}: ${res.status}`);
   }
   return res.json() as Promise<T>;
 }
@@ -207,7 +225,7 @@ export const api = {
     const res = await fetch(`${BASE}/v1/predict`, { method: "POST", headers: authHeaders(), body: form });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      throw new Error((err as { message?: string }).message ?? `predict: ${res.status}`);
+      throw apiError(res.status, err, `predict: ${res.status}`);
     }
     return res.json() as Promise<{ copy_id: number; status: string }>;
   },
@@ -225,7 +243,7 @@ export const api = {
     const res = await fetch(`${BASE}/v1/cards/${cardId}/reference`, { method: "POST", headers: authHeaders(), body: form });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      throw new Error((err as { message?: string }).message ?? `upload: ${res.status}`);
+      throw apiError(res.status, err, `upload: ${res.status}`);
     }
     return res.json() as Promise<{ result: string; requeued: number }>;
   },
