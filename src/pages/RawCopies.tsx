@@ -17,13 +17,15 @@ export default function RawCopies() {
   const view = params.get("view") ?? "flagged";
   const offset = Number(params.get("offset") ?? 0);
   const [data, setData] = useState<CopyList | null>(null);
-  const [counts, setCounts] = useState<{ bought: number; all: number } | null>(null);
+  const [counts, setCounts] = useState<{ bought: number; all: number; ebay: number; inventory: number } | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
     if (view === "flagged") return;
     const p = new URLSearchParams({ grader: "RAW", limit: String(PAGE), offset: String(offset) });
     if (view === "bought") p.set("bought", "yes");
+    if (view === "ebay") p.set("kind", "listing");
+    if (view === "inventory") p.set("kind", "inventory");
     setData(null);
     api.listCopies(p).then(setData).catch((e: unknown) => setErr(String(e)));
   }, [view, offset]);
@@ -32,7 +34,9 @@ export default function RawCopies() {
     Promise.all([
       api.listCopies(new URLSearchParams({ grader: "RAW", bought: "yes", limit: "1" })),
       api.listCopies(new URLSearchParams({ grader: "RAW", limit: "1" })),
-    ]).then(([b, a]) => setCounts({ bought: b.total, all: a.total })).catch(() => undefined);
+      api.listCopies(new URLSearchParams({ grader: "RAW", kind: "listing", limit: "1" })),
+      api.listCopies(new URLSearchParams({ grader: "RAW", kind: "inventory", limit: "1" })),
+    ]).then(([b, a, e, i]) => setCounts({ bought: b.total, all: a.total, ebay: e.total, inventory: i.total })).catch(() => undefined);
   }, []);
 
   const tab = (v: string, label: string, n?: number) => (
@@ -55,12 +59,15 @@ export default function RawCopies() {
       </div>
       <div className="flex gap-2">
         {tab("flagged", "flagged by the tracker")}
+        {tab("ebay", "eBay listings", counts?.ebay)}
+        {tab("inventory", "our inventory", counts?.inventory)}
         {tab("bought", "bought", counts?.bought)}
         {tab("all", "all raw copies", counts?.all)}
       </div>
       {err && <div className="text-xs text-red-400">{err}</div>}
+      {view === "inventory" && <InventoryResults />}
       {view === "flagged" ? <Flagged /> : !data ? <div className="text-xs text-muted">loading…</div>
-        : data.items.length === 0 ? <div className="text-xs text-muted">{view === "bought" ? "No copies marked bought yet." : "No raw copies yet."}</div>
+        : data.items.length === 0 ? <div className="text-xs text-muted">{view === "bought" ? "No copies marked bought yet." : view === "inventory" ? "No in-hand scans yet (the admin app sends them; they need the API token under Settings)." : "No raw copies yet."}</div>
         : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
             {data.items.map((c) => <Tile key={c.id} c={c} />)}
@@ -224,6 +231,83 @@ function FlagRow({ f, onChange }: { f: RawFeedback; onChange: () => void }) {
           {msg && <span className="text-[10px] text-muted ml-1">{msg}</span>}
         </div>
       </div>
+    </div>
+  );
+}
+
+// Our inventory vs the grades it got (backend inventory_results.go): the
+// pre-grader's odds of a 10 from the in-hand scan, from the listing photos
+// and for an average copy, against what actually came back.
+interface InvSummary {
+  grader: string; graded: number; tens: number; actual_rate: number; scan_p10: number | null; listing_p10: number | null; listing_n: number;
+  expected_p10: number | null; brier?: number | null; buckets: { lo: number; hi: number; n: number; predicted: number; actual: number }[];
+}
+interface InvCopy {
+  copy_id: number; card_name: string; card_number: string; set_name: string; listing_copy_id?: number; grader: string;
+  scan_p10: number | null; listing_p10: number | null; expected_p10: number | null; rescan?: boolean;
+  graded?: { grade: string; cert_number?: string; ten: boolean };
+}
+const pc = (v: number | null | undefined) => (v == null ? "—" : `${Math.round(v * 100)}%`);
+
+function InventoryResults() {
+  const [d, setD] = useState<{ copies: InvCopy[]; summary: InvSummary[]; notes: string[] } | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  useEffect(() => { api.inventoryResults().then(setD).catch((e: unknown) => setErr(String(e))); }, []);
+  if (err) return <div className="text-xs text-red-400">{err.includes("401") ? "Inventory results need the API token (Settings → API token)." : err}</div>;
+  if (!d) return <div className="text-xs text-muted">loading results…</div>;
+  const graded = d.copies.filter((c) => c.graded && !c.rescan);
+  return (
+    <div className="bg-surface border border-border rounded-md p-3 space-y-3 text-xs">
+      <div>
+        <div className="font-semibold">Pre-grade vs real grades</div>
+        <p className="text-muted mt-0.5 max-w-3xl">
+          Copies we own, scanned in hand and later graded: did the pre-grader's odds of a 10 hold up? {graded.length} graded of{" "}
+          {d.copies.filter((c) => !c.rescan).length} in inventory.
+        </p>
+      </div>
+      {graded.length === 0 ? (
+        <div className="text-muted">No graded inventory copies yet. Grades arrive from the admin app (or the tracker) as outcomes.</div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="text-[10px] text-muted">
+              <tr><th className="text-left py-1">grader</th><th className="text-right">graded</th><th className="text-right">10s</th>
+                <th className="text-right px-2">actual 10 rate</th><th className="text-right px-2">predicted (scan)</th>
+                <th className="text-right px-2">predicted (listing)</th><th className="text-right px-2">average copy</th><th className="text-right px-2" title="lower is better">Brier</th></tr>
+            </thead>
+            <tbody>
+              {d.summary.filter((s) => s.graded > 0).map((s) => (
+                <tr key={s.grader} className="border-t border-border">
+                  <td className="py-1 font-semibold">{s.grader}</td><td className="text-right font-mono">{s.graded}</td><td className="text-right font-mono">{s.tens}</td>
+                  <td className="text-right font-mono px-2 text-accent">{pc(s.actual_rate)}</td><td className="text-right font-mono px-2">{pc(s.scan_p10)}</td>
+                  <td className="text-right font-mono px-2">{pc(s.listing_p10)}{s.listing_n ? <span className="text-muted"> ({s.listing_n})</span> : null}</td>
+                  <td className="text-right font-mono px-2">{pc(s.expected_p10)}</td><td className="text-right font-mono px-2">{s.brier?.toFixed(3) ?? "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {d.copies.length > 0 && (
+        <details>
+          <summary className="cursor-pointer text-muted">per copy ({d.copies.length})</summary>
+          <div className="overflow-x-auto mt-1">
+            <table className="w-full">
+              <tbody>
+                {d.copies.map((c) => (
+                  <tr key={c.copy_id} className={`border-t border-border ${c.rescan ? "opacity-50" : ""}`}>
+                    <td className="py-1"><Link to={`/copies/${c.copy_id}`} className="hover:text-accent">{c.card_name} {c.card_number}</Link> <span className="text-muted">{c.set_name}</span></td>
+                    <td>{c.listing_copy_id ? <Link to={`/copies/${c.listing_copy_id}`} className="text-muted hover:text-accent">listing #{c.listing_copy_id}</Link> : <span className="text-muted">off-board</span>}</td>
+                    <td className="font-mono text-right px-2" title="scan / listing / average copy">{pc(c.scan_p10)} <span className="text-muted">/ {pc(c.listing_p10)} / {pc(c.expected_p10)}</span></td>
+                    <td className="px-2">{c.graded ? <span className={c.graded.ten ? "text-green" : "text-red-400"}>{c.grader} {c.graded.grade}</span> : <span className="text-muted">not graded</span>}{c.rescan && <span className="text-muted"> · older scan</span>}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </details>
+      )}
+      <ul className="text-[10px] text-muted list-disc pl-4">{d.notes.map((n) => <li key={n}>{n}</li>)}</ul>
     </div>
   );
 }
