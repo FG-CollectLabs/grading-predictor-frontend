@@ -192,6 +192,8 @@ function Machine({ s, n0, power, worker }: { s?: StationStats; n0: string; power
         )}
         {bin(`reviewed by you${s.reviewed_per_day ? ` (${rate(s.reviewed_per_day)}/day)` : ""}`, "reviewed", "border-border text-[#e6edf3]", "a person decided this step")}
         {(st.removed ?? 0) > 0 && bin("removed", "removed", "border-border text-muted", "removed from the dataset")}
+        {(st.reserve ?? 0) > 0 && bin("reserve · not checked", "reserve", "border-border text-muted",
+          "outside the check sample (Settings → Checked per card and grade): never queued for the AI or for you; still measured and used by the model at its automatic weight")}
       </div>
     </div>
   );

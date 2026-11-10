@@ -63,6 +63,7 @@ const STATION_LABEL: Record<string, string> = {
 const STATE_LABEL: Record<string, string> = {
   queued: "in the automation queue", upstream: "waiting at earlier machines", high: "auto-passed (high)",
   medium: "auto-passed (medium)", low: "needs you", scans: "needs scans from the cert page", reviewed: "reviewed by you", removed: "removed", auto: "auto-passed",
+  reserve: "reserve (outside the check sample)",
 };
 
 export const FLAG_LABELS: Record<string, string> = {

@@ -301,7 +301,7 @@ export interface CopyTriage {
 }
 
 export interface CopyDetail extends CopyRow {
-  /** state per factory station: queued | high | medium | low | reviewed | removed | n/a | upstream */
+  /** state per factory station: queued | high | medium | low | reviewed | removed | n/a | upstream | reserve */
   stations?: Record<string, string>;
   photos: CopyPhoto[];
   triage: CopyTriage | null;
@@ -487,7 +487,7 @@ export interface ReviewSteps {
 // ── Factory stations ─────────────────────────────────────────────────────────
 
 export type StationId = "card" | "grade" | "cert" | "photos" | "front" | "back" | "corners" | "edges";
-export type StationState = "upstream" | "queued" | "high" | "medium" | "low" | "reviewed" | "removed" | "n/a" | "scans";
+export type StationState = "upstream" | "queued" | "high" | "medium" | "low" | "reviewed" | "removed" | "n/a" | "scans" | "reserve";
 
 export interface StationStats {
   id: StationId;
