@@ -820,6 +820,7 @@ const MACHINE: Record<string, { icon: string; cls: string; text: string }> = {
   upstream: { icon: "…", cls: "text-muted", text: "waiting for an earlier machine" },
   scans: { icon: "scans", cls: "text-red-400", text: "no listing photo shows this side in full: upload the grader's scan" },
   "n/a": { icon: "–", cls: "text-muted", text: "doesn't apply to this copy" },
+  reserve: { icon: "reserve", cls: "text-muted", text: "outside the check sample: no AI check or review queue; still used by the model at its automatic weight" },
 };
 
 function MachineMark({ state }: { state?: string }) {
