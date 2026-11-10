@@ -1,3 +1,5 @@
+import { Mark } from "./brand/Mark";
+import { COMPANY_NAME, PRODUCT_NAME } from "./brand/brand";
 import { HashRouter, Routes, Route, Link, Navigate, useLocation, useParams } from "react-router-dom";
 import CardList from "./pages/CardList";
 import CardDetail from "./pages/CardDetail";
@@ -38,11 +40,15 @@ function Header() {
   const { pathname } = useLocation();
   return (
     <header className="border-b border-border">
-      <div className="flex items-baseline gap-4 px-6 pt-4">
-        <Link to="/" className="text-lg font-semibold hover:text-accent transition-colors">
-          Grading Predictor
+      <div className="flex items-center gap-4 px-6 pt-4">
+        <Link to="/" className="flex items-center gap-2 shrink-0 self-center" title={`${PRODUCT_NAME} · ${COMPANY_NAME}`}>
+          <Mark height={32} />
+          <span className="flex flex-col leading-none">
+            <span className="font-bold text-white tracking-tight text-sm">{PRODUCT_NAME}</span>
+            <span className="mt-0.5 text-[8px] font-semibold tracking-[0.2em] text-muted uppercase">{COMPANY_NAME}</span>
+          </span>
         </Link>
-        <span className="text-muted text-xs">pre-grading dataset</span>
+        <span className="text-muted text-xs hidden sm:inline">pre-grading dataset</span>
         <a
           href="https://github.com/FG-CollectLabs/grading-predictor-frontend"
           target="_blank"
