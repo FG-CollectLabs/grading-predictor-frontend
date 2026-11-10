@@ -1,5 +1,5 @@
 import type {
-  CenteringAnalytics, CenteringOdds, CardHit, SettingValue, RawFeedback, RawCalibration, ConditionReview, ConditionFindings,
+  BatchDetail, BatchSummary, CenteringAnalytics, CenteringOdds, CardHit, SettingValue, RawFeedback, RawCalibration, ConditionReview, ConditionFindings,
   Card,
   CardDetail,
   CertRow,
@@ -213,6 +213,39 @@ export const api = {
     get<{ cards: SetCard[] }>(`/v1/analytics/sets/${encodeURIComponent(code)}/cards?language=${language}`),
   getCardAnalytics: (id: number) => get<CardAnalytics>(`/v1/analytics/cards/${id}`),
   getCenteringAnalytics: (p: URLSearchParams) => get<CenteringAnalytics>(`/v1/analytics/centering?${p.toString()}`),
+  // batch scans (factory/batch)
+  listBatches: () => getAuthed<{ batches: BatchSummary[] }>("/v1/batch-scans"),
+  getBatch: (id: number) => getAuthed<BatchDetail>(`/v1/batch-scans/${id}`),
+  createBatch: (name: string, setCode: string) => post<{ id: number }>("/v1/batch-scans", { name, set_code: setCode }),
+  startBatch: (id: number) => post<{ id: number }>(`/v1/batch-scans/${id}/start`, {}),
+  promoteBatchCard: (id: number, cid: number, cardId: number) =>
+    post<{ copy_id: number }>(`/v1/batch-scans/${id}/cards/${cid}/promote`, { card_id: cardId }),
+  swapBatchBack: (id: number, cid: number, other: number) => post<unknown>(`/v1/batch-scans/${id}/cards/${cid}/swap-back`, { with: other }),
+  hideBatchCard: (id: number, cid: number, hidden: boolean) => patch<unknown>(`/v1/batch-scans/${id}/cards/${cid}`, { hidden }),
+  deleteBatch: async (id: number) => {
+    const res = await fetch(`${BASE}/v1/batch-scans/${id}`, { method: "DELETE", headers: authHeaders() });
+    if (!res.ok) throw apiError(res.status, await res.json().catch(() => ({})), `DELETE batch: ${res.status}`);
+  },
+  // one file per request (Cloudflare refuses bodies over 100 MB); progress 0..1
+  uploadBatchFile: (id: number, file: File, side: string, onProgress: (f: number) => void) =>
+    new Promise<void>((resolve, reject) => {
+      const x = new XMLHttpRequest();
+      x.open("POST", `${BASE}/v1/batch-scans/${id}/files`);
+      const t = getToken();
+      if (t) x.setRequestHeader("Authorization", `Bearer ${t}`);
+      x.upload.onprogress = (e) => { if (e.lengthComputable) onProgress(e.loaded / e.total); };
+      x.onload = () => {
+        if (x.status < 300) { resolve(); return; }
+        let msg = `upload: ${x.status}`;
+        try { msg = JSON.parse(x.responseText).message || msg; } catch { /* not JSON */ }
+        reject(x.status === 401 ? apiError(401, {}, msg) : new Error(msg));
+      };
+      x.onerror = () => reject(new Error("upload failed (network)"));
+      const form = new FormData();
+      form.append("side", side);
+      form.append("file", file);
+      x.send(form);
+    }),
   searchCards: (q: string) => get<{ cards: CardHit[] }>(`/v1/analytics/card-search?q=${encodeURIComponent(q)}`),
   getCenteringOdds: (p: URLSearchParams) => get<CenteringOdds>(`/v1/analytics/centering/odds?${p.toString()}`),
   getPrediction: (copyId: number) => get<Prediction>(`/v1/predict/${copyId}`),

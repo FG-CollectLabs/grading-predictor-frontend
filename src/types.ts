@@ -659,3 +659,31 @@ export interface ConditionReview {
   id: number; placed_by: string; findings: ConditionFindings; corners_clean: boolean | null; edges_clean: boolean | null;
   photo_ok: boolean | null; confidence: number | null; note: string | null; created_at: string;
 }
+
+// ── batch scans (many loose cards per flatbed sheet) ──
+export interface BatchFile { path: string; name: string; kind: "pdf" | "image"; side: string; bytes: number }
+export interface BatchSummary {
+  id: number; name: string; status: "uploading" | "pending" | "processing" | "ready" | "failed";
+  set_code: string | null; files: BatchFile[]; progress: { pages?: number; sheets?: number; cards_measured?: number } | null;
+  warnings: string[] | null; error: string | null; engine: string | null; created_at: string; updated_at: string;
+  cards: number; centered?: number; promoted: number;
+}
+export type Pt = [number, number];
+export interface BatchSide {
+  ok: boolean; crop: string; thumb: string; crop_size: [number, number]; quad: Pt[]; outer: Pt[] | null; inner: Pt[] | null;
+  lr: number | null; tb: number | null; lr_err: number | null; tb_err: number | null; corner_offround_mm: number | null;
+  flags: string[] | null; row: number; col: number;
+}
+export type BatchVerdict = "centered" | "borderline" | "off_center" | "front_only" | "back_only" | "unmeasured";
+export interface BatchCard {
+  id: number; sheet_no: number; pos: number; row: number | null; col: number | null;
+  front: BatchSide | null; back: BatchSide | null; card_id: number | null; copy_id: number | null; hidden: boolean; card_name?: string;
+  off_center?: Record<string, number>; worse_side?: Record<string, number>; err_pp: number; psa_cap?: string;
+  verdict: BatchVerdict; p10?: Record<string, number> | null;
+}
+export interface BatchSheet {
+  id: number; sheet_no: number; front_preview: string | null; back_preview: string | null;
+  front_size: [number, number] | null; back_size: [number, number] | null;
+  pairing: { layout: string | null; mismatch_mm: number | null } | null; warnings: string[] | null;
+}
+export interface BatchDetail { batch: BatchSummary; sheets: BatchSheet[]; cards: BatchCard[]; odds_basis: string; notes: string[] }
