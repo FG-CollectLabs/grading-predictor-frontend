@@ -11,6 +11,7 @@ import ReviewHistory from "./pages/ReviewHistory";
 import References from "./pages/References";
 import Templates from "./pages/Templates";
 import Scans from "./pages/Scans";
+import { BatchScans, BatchView } from "./pages/BatchScans";
 import RawCopies from "./pages/RawCopies";
 import AutoActions from "./pages/AutoActions";
 import ReviewPriority from "./pages/ReviewPriority";
@@ -103,6 +104,8 @@ export default function App() {
             <Route path="/factory/references" element={<References />} />
             <Route path="/factory/templates" element={<Templates />} />
             <Route path="/factory/scans" element={<Scans />} />
+            <Route path="/factory/batch" element={<BatchScans />} />
+            <Route path="/factory/batch/:id" element={<BatchView />} />
             <Route path="/factory/raw" element={<RawCopies />} />
             <Route path="/factory/auto" element={<AutoActions />} />
             <Route path="/factory/priority" element={<ReviewPriority />} />
