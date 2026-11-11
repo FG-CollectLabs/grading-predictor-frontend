@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, imageUrl } from "../api";
+import BatchLayoutEditor from "../components/BatchLayoutEditor";
 import CenteringEditor from "../components/CenteringEditor";
 import type { BatchCard, BatchDetail, BatchSheet, BatchSide, BatchSummary, BatchVerdict, CardHit, CenteringMeasurement, InnerMM, Pt, Quad } from "../types";
 
@@ -160,6 +161,7 @@ export function BatchView() {
   const [show, setShow] = useState<Show>("good");
   const [sort, setSort] = useState<Sort>("odds");
   const [focus, setFocus] = useState<number | null>(null);
+  const [marking, setMarking] = useState(false);
   const load = useCallback(() => {
     api.getBatch(id).then(setD).catch((e) => setErr(String(e.message ?? e)));
   }, [id]);
@@ -209,9 +211,21 @@ export function BatchView() {
             <button className="text-muted hover:text-accent" title="measure the uploads again (after an engine update)"
               onClick={() => api.startBatch(id).then(load).catch((e) => setErr(String(e.message ?? e)))}>re-measure</button>
           )}
+          {(b.status === "failed" || b.status === "ready") && !marking && (
+            <button className="text-muted hover:text-accent" title="draw a box around each card yourself and number fronts and backs (for cards in toploaders or sleeves)"
+              onClick={() => setMarking(true)}>mark cards by hand</button>
+          )}
+          {b.layout && <span className="text-accent" title="the cards were marked by hand; front N is paired with back N">marked by hand</span>}
         </div>
         {b.error && <div className="text-red-400 text-xs mt-1">{b.error}</div>}
         {busy && <div className="text-yellow text-xs mt-1">Measuring: a 9-card sheet takes about a minute per side. This page updates by itself.</div>}
+        {b.status === "ready" && !b.layout && !marking && (b.warnings ?? []).some((w) => /no cards found|touching|no backs page/.test(w)) && (
+          <div className="text-xs mt-1">
+            Some cards weren't found or paired (holders, sleeves or a sheet protector hide their edges).{" "}
+            <button className="text-accent hover:underline" onClick={() => setMarking(true)}>Mark them by hand →</button>
+          </div>
+        )}
+        {marking && <div className="mt-3"><BatchLayoutEditor d={d} onClose={() => setMarking(false)} onSaved={load} /></div>}
         {(b.warnings ?? []).length > 0 && (
           <ul className="text-yellow text-xs mt-2 list-disc ml-4">{b.warnings!.map((w, i) => <li key={i}>{w}</li>)}</ul>
         )}
