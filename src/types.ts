@@ -667,8 +667,13 @@ export interface BatchSummary {
   set_code: string | null; files: BatchFile[]; progress: { pages?: number; sheets?: number; cards_measured?: number } | null;
   warnings: string[] | null; error: string | null; engine: string | null; created_at: string; updated_at: string;
   cards: number; centered?: number; promoted: number;
+  /** hand-marked cards (null = found automatically) and what the last run saw per page */
+  layout?: BatchLayout | null; pages?: BatchPageInfo[] | null;
 }
 export type Pt = [number, number];
+export type LayoutSide = "front" | "back" | "skip";
+export interface BatchLayout { cards: number; pages: { page: number; side: LayoutSide; boxes: { card: number; quad: Pt[] }[] }[] }
+export interface BatchPageInfo { page: number; label: string; side: string; preview: string | null; size: [number, number]; boxes: Pt[][]; cards: number[] | null }
 export interface BatchSide {
   ok: boolean; crop: string; thumb: string; crop_size: [number, number]; quad: Pt[]; outer: Pt[] | null; inner: Pt[] | null;
   lr: number | null; tb: number | null; lr_err: number | null; tb_err: number | null; corner_offround_mm: number | null;

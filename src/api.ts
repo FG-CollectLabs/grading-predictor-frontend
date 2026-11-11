@@ -1,5 +1,5 @@
 import type {
-  BatchDetail, InnerMM, Quad, BatchSummary, CenteringAnalytics, CenteringOdds, CardHit, SettingValue, RawFeedback, RawCalibration, ConditionReview, ConditionFindings,
+  BatchDetail, BatchLayout, InnerMM, Quad, BatchSummary, CenteringAnalytics, CenteringOdds, CardHit, SettingValue, RawFeedback, RawCalibration, ConditionReview, ConditionFindings,
   Card,
   CardDetail,
   CertRow,
@@ -228,6 +228,18 @@ export const api = {
     post<unknown>(`/v1/batch-scans/${id}/cards/${cid}/centering`, { side, outer_quad, inner_mm }),
   resetBatchCentering: (id: number, cid: number, side: "front" | "back") =>
     post<unknown>(`/v1/batch-scans/${id}/cards/${cid}/centering`, { side, reset: true }),
+  /** mark the cards by hand (start: measure right away) */
+  putBatchLayout: async (id: number, layout: BatchLayout, start: boolean) => {
+    const res = await fetch(`${BASE}/v1/batch-scans/${id}/layout`, {
+      method: "PUT", headers: { "Content-Type": "application/json", ...authHeaders() }, body: JSON.stringify({ ...layout, start }),
+    });
+    if (!res.ok) throw apiError(res.status, await res.json().catch(() => ({})), `PUT layout: ${res.status}`);
+  },
+  /** back to finding the cards automatically */
+  deleteBatchLayout: async (id: number) => {
+    const res = await fetch(`${BASE}/v1/batch-scans/${id}/layout`, { method: "DELETE", headers: authHeaders() });
+    if (!res.ok) throw apiError(res.status, await res.json().catch(() => ({})), `DELETE layout: ${res.status}`);
+  },
   deleteBatch: async (id: number) => {
     const res = await fetch(`${BASE}/v1/batch-scans/${id}`, { method: "DELETE", headers: authHeaders() });
     if (!res.ok) throw apiError(res.status, await res.json().catch(() => ({})), `DELETE batch: ${res.status}`);
