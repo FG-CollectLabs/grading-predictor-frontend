@@ -182,7 +182,7 @@ export type CenteringStage = "outer" | "inner" | "both";
 export type StageDecision = "approved" | "fixed" | "rejected";
 
 export default function CenteringEditor({
-  copyId, side, imagePath, measurements, onSaved, stage = "both", onStageDone,
+  copyId, side, imagePath, measurements, onSaved, stage = "both", onStageDone, saveTo,
 }: {
   copyId: number;
   side: "front" | "back";
@@ -193,6 +193,10 @@ export default function CenteringEditor({
    * (the editor keeps one set of edits across both). "both" = one Accept. */
   stage?: CenteringStage;
   onStageDone?: (stage: "outer" | "inner", decision: StageDecision, info: Record<string, unknown>) => void;
+  /** Save somewhere other than a copy's measurements (batch scan cards): the
+   * adjusted outline and inner border. Hides the copy-only controls (note,
+   * can't-measure). */
+  saveTo?: (outer_quad: Quad, inner_mm: InnerMM) => Promise<void>;
 }) {
   const current = currentMeasurement(measurements);
   const [src, setSrc] = useState<ImageData | null>(null);
@@ -550,6 +554,11 @@ export default function CenteringEditor({
       setSaving(true);
       setMsg(null);
       try {
+        if (saveTo) {
+          if (action === "adjust") await saveTo(quad!, inner!);
+          setMsg(action === "adjust" ? "Adjustment saved." : "Kept as measured.");
+          return current.id;
+        }
         const res = await api.postCentering(copyId, {
           action,
           base_id: current.id,
@@ -569,7 +578,7 @@ export default function CenteringEditor({
         setSaving(false);
       }
     },
-    [current, copyId, quad, inner, tags, note, grades, onSaved],
+    [current, copyId, quad, inner, tags, note, grades, onSaved, saveTo],
   );
 
   if (!imagePath) return <div className="text-xs text-muted">No {side} photo stored yet.</div>;
@@ -690,13 +699,13 @@ export default function CenteringEditor({
               ))}
             </div>
           )}
-          <textarea
+          {!saveTo && <textarea
             value={note}
             onChange={(e) => setNote(e.target.value)}
             rows={3}
             placeholder="note: what the engine got wrong (e.g. picked the slab's inner wall on the left)"
             className="w-full bg-bg border border-border rounded px-2 py-1 text-xs outline-none focus:border-accent"
-          />
+          />}
           <div className="flex flex-col gap-1.5">
             {stage === "outer" ? (
               <button
@@ -753,7 +762,7 @@ export default function CenteringEditor({
                 Reset to {current.placed_by === "auto" ? "engine" : "saved"}
               </button>
             )}
-            <button
+            {!saveTo && <button
               disabled={!current || saving}
               onClick={async () => {
                 const mid = await save("reject");
@@ -762,7 +771,7 @@ export default function CenteringEditor({
               className="text-xs border border-red-400/40 text-red-400 rounded px-2 py-1 hover:bg-red-500/10 disabled:opacity-40"
             >
               Can't measure this photo
-            </button>
+            </button>}
           </div>
           {msg && <div className="text-xs text-green">{msg}</div>}
         </div>

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, imageUrl } from "../api";
-import type { BatchCard, BatchDetail, BatchSheet, BatchSide, BatchSummary, BatchVerdict, CardHit, Pt } from "../types";
+import CenteringEditor from "../components/CenteringEditor";
+import type { BatchCard, BatchDetail, BatchSheet, BatchSide, BatchSummary, BatchVerdict, CardHit, CenteringMeasurement, InnerMM, Pt, Quad } from "../types";
 
 // Batch scans: many loose cards on one flatbed scan (a sheet of fronts, then
 // the same cards flipped over in place), to pick out the well-centred ones
@@ -305,19 +306,20 @@ function SheetView({ s, cards, focus, onPick }: { s: BatchSheet; cards: BatchCar
   );
 }
 
-function SideThumb({ s, label }: { s: BatchSide | null; label: string }) {
+function SideThumb({ s, label, onOpen }: { s: BatchSide | null; label: string; onOpen: () => void }) {
   if (!s) return <div className="w-[150px] h-[205px] border border-dashed border-border rounded flex items-center justify-center text-muted">no {label}</div>;
   const k = 150 / s.crop_size[0];
   const h = s.crop_size[1] * k;
   const poly = (q: Pt[] | null) => q?.map((p) => `${p[0] * k},${p[1] * k}`).join(" ");
   return (
-    <a href={imageUrl(s.crop)} target="_blank" rel="noreferrer" className="relative block" style={{ width: 150, height: h }} title={`open the full ${label} crop`}>
+    <button type="button" onClick={onOpen} className="relative block" style={{ width: 150, height: h }} title={`examine the ${label}: zoom, corners, move the centering lines`}>
       <img src={imageUrl(s.thumb)} alt={label} className="block w-full h-full rounded" loading="lazy" />
       <svg className="absolute inset-0" width={150} height={h}>
         {s.outer && <polygon points={poly(s.outer)} fill="none" stroke="#58a6ff" strokeWidth={1} />}
         {s.inner && <polygon points={poly(s.inner)} fill="none" stroke="#bc8cff" strokeWidth={1} />}
       </svg>
-    </a>
+      {s.adjusted_by && <span className="absolute top-1 left-1 text-[9px] bg-bg/80 text-accent rounded px-1">adjusted</span>}
+    </button>
   );
 }
 
@@ -326,7 +328,8 @@ function CardTile({ c, batchId, all, focused, onChange, onFocus }: {
 }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => { if (focused) ref.current?.scrollIntoView({ behavior: "smooth", block: "center" }); }, [focused]);
-  const [picking, setPicking] = useState(false);
+  const [picking, setPicking] = useState<false | "promote" | "name">(false);
+  const [examine, setExamine] = useState<"front" | "back" | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const v = VERDICT[c.verdict];
   const flags = [...(c.front?.flags ?? []), ...(c.back?.flags ?? [])].filter((f) =>
@@ -340,9 +343,10 @@ function CardTile({ c, batchId, all, focused, onChange, onFocus }: {
         {c.p10?.PSA != null && <span className="ml-auto" title="odds of a PSA 10 for an average card with this centering">PSA 10 <b>{pct(c.p10.PSA)}</b></span>}
       </div>
       <div className="flex gap-2">
-        <SideThumb s={c.front} label="front" />
-        <SideThumb s={c.back} label="back" />
+        <SideThumb s={c.front} label="front" onOpen={() => setExamine("front")} />
+        <SideThumb s={c.back} label="back" onOpen={() => setExamine("back")} />
       </div>
+      {examine && <Examine c={c} batchId={batchId} initial={examine} onClose={() => setExamine(null)} onChange={onChange} />}
       <table className="w-full">
         <tbody>
           <tr><td className="text-muted w-14">front</td><td>L/R {split(c.front?.lr ?? null)}</td><td>T/B {split(c.front?.tb ?? null)}</td></tr>
@@ -355,18 +359,30 @@ function CardTile({ c, batchId, all, focused, onChange, onFocus }: {
         {c.p10 && Object.entries(c.p10).filter(([g]) => g !== "PSA").map(([g, p]) => <span key={g}>{g} 10 {pct(p)}</span>)}
         {flags.length > 0 && <span className="text-yellow" title={flags.join(", ")}>check outline</span>}
       </div>
+      <RankLine c={c} />
       {err && <div className="text-red-400">{err}</div>}
       <div className="flex flex-wrap gap-2 items-center" onClick={(e) => e.stopPropagation()}>
         {c.copy_id ? (
           <Link to={`/copies/${c.copy_id}`} className="text-accent hover:underline">pre-graded: {c.card_name ?? `copy ${c.copy_id}`} →</Link>
         ) : picking ? (
           <CardPicker onCancel={() => setPicking(false)} onPick={(card) => {
-            api.promoteBatchCard(batchId, c.id, card.id).then(() => { setPicking(false); onChange(); })
+            (picking === "name" ? api.nameBatchCard(batchId, c.id, card.id) : api.promoteBatchCard(batchId, c.id, card.id))
+              .then(() => { setPicking(false); onChange(); })
               .catch((e) => setErr(String(e.message ?? e)));
           }} />
         ) : (
           <>
-            <button disabled={!c.front || !c.back} onClick={() => setPicking(true)}
+            {c.card_name ? (
+              <span className="w-full flex items-center gap-2">
+                <span title="named: odds use this card's own levels and PSA gem rate">{c.card_name}</span>
+                <button className="text-muted hover:text-accent" onClick={() => setPicking("name")}>change</button>
+                <button className="text-muted hover:text-accent" onClick={() => api.nameBatchCard(batchId, c.id, 0).then(onChange).catch((x) => setErr(String(x.message ?? x)))}>clear</button>
+              </span>
+            ) : (
+              <button className="text-muted hover:text-accent" onClick={() => setPicking("name")}
+                title="say which card this is (no copy is made): the odds and rank use its own PSA gem rate and graded copies">name card</button>
+            )}
+            <button disabled={!c.front || !c.back} onClick={() => setPicking("promote")}
               title={c.front && c.back ? "choose the card; it becomes an in-hand scan copy with its own odds" : "needs a front and a back"}
               className="px-2 py-0.5 rounded border border-accent text-accent disabled:opacity-40 hover:bg-accent/10">Pre-grade</button>
             {c.back && sameSheet.length > 0 && (
@@ -412,5 +428,85 @@ function CardPicker({ onPick, onCancel }: { onPick: (c: CardHit) => void; onCanc
         </div>
       )}
     </span>
+  );
+}
+
+/** where the centering ranks among graded copies, and the card's PSA gem rate */
+function RankLine({ c }: { c: BatchCard }) {
+  if (!c.rank?.length && !c.psa_gem_rate) return null;
+  return (
+    <div className="space-y-0.5">
+      {c.rank?.map((r) => (
+        <div key={r.grade} title={`better centered than this share of ${r.n} measured ${r.grade} copies of ${r.of}. Overall weighs front and back as the PSA model does; front / back use each side's worse axis.`}>
+          better centered than <b className={r.overall >= 50 ? "text-green" : r.overall >= 25 ? "text-yellow" : ""}>{r.overall}%</b> of {r.grade}s
+          <span className="text-muted"> · front {r.front}% · back {r.back}% · {r.n} of {r.of}</span>
+        </div>
+      ))}
+      {c.psa_gem_rate && (
+        <div className="text-muted" title="PSA population gem rate (GemRate): the odds above start from it">
+          PSA gem rate {c.psa_gem_rate.pct}% of {c.psa_gem_rate.pop_total.toLocaleString()} graded
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** a batch side as a centering measurement, for the editor */
+function asMeasurement(s: BatchSide, side: "front" | "back"): CenteringMeasurement {
+  const mm = s.inner_mm;
+  const inner: InnerMM | null = mm && mm.left != null && mm.right != null && mm.top != null && mm.bottom != null
+    ? { left: mm.left, right: mm.right, top: mm.top, bottom: mm.bottom } : null;
+  return {
+    id: s.adjusted_by ? 2 : 1, image_id: 0, side, image_sha256: null, supersedes: null,
+    outer_quad: s.outer && s.outer.length === 4 ? (s.outer.map((p) => [p[0], p[1]]) as Quad) : null,
+    px_per_mm: null, inner_mm: inner, lr_left_pct: s.lr, tb_top_pct: s.tb, lr_err_pp: s.lr_err, tb_err_pp: s.tb_err,
+    rotation_deg: null, placed_by: s.adjusted_by ?? "auto", detector_version: s.engine ?? "batch",
+    status: s.adjusted_by ? "accepted" : "proposed", flags: s.flags ?? [], tags: [], note: null, created_at: "",
+  };
+}
+
+/** full-size look at one card: zoom, corners, and the centering lines to move */
+function Examine({ c, batchId, initial, onClose, onChange }: {
+  c: BatchCard; batchId: number; initial: "front" | "back"; onClose: () => void; onChange: () => void;
+}) {
+  const [side, setSide] = useState<"front" | "back">(initial);
+  const [err, setErr] = useState<string | null>(null);
+  useEffect(() => {
+    const k = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", k);
+    return () => window.removeEventListener("keydown", k);
+  }, [onClose]);
+  const s = c[side];
+  const ms = useMemo(() => (s ? [asMeasurement(s, side)] : []), [s, side]);
+  return (
+    <div className="fixed inset-0 z-40 bg-black/70 flex items-start justify-center overflow-auto p-4" onClick={(e) => { e.stopPropagation(); onClose(); }}>
+      <div className="bg-bg border border-border rounded-md p-3 space-y-2 max-w-[1100px] w-full" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center gap-3 text-xs">
+          <span className="font-semibold">{place(c)}{c.card_name ? ` · ${c.card_name}` : ""}</span>
+          {(["front", "back"] as const).map((v) => (
+            <button key={v} disabled={!c[v]} onClick={() => setSide(v)}
+              className={`px-2 py-0.5 rounded border disabled:opacity-40 ${side === v ? "border-accent text-accent" : "border-border text-muted"}`}>{v}</button>
+          ))}
+          {s?.adjusted_by && (
+            <button className="text-muted hover:text-accent" title={`engine: L/R ${split(s.auto?.lr ?? null)} · T/B ${split(s.auto?.tb ?? null)}`}
+              onClick={() => api.resetBatchCentering(batchId, c.id, side).then(onChange).catch((x) => setErr(String(x.message ?? x)))}>
+              reset to the engine's lines
+            </button>
+          )}
+          <a href={s ? imageUrl(s.crop) : undefined} target="_blank" rel="noreferrer" className="text-muted hover:text-accent">open the scan</a>
+          <button onClick={onClose} className="ml-auto text-muted hover:text-[#e6edf3]" aria-label="close">close ×</button>
+        </div>
+        {err && <div className="text-red-400 text-xs">{err}</div>}
+        <RankLine c={c} />
+        {s ? (
+          <CenteringEditor key={`${c.id}-${side}-${s.adjusted_by ?? "auto"}-${s.lr}-${s.tb}`} copyId={0} side={side} imagePath={s.crop}
+            measurements={ms} onSaved={() => {}}
+            saveTo={(q, inner) => api.adjustBatchCentering(batchId, c.id, side, q, inner).then(() => { setErr(null); onChange(); })} />
+        ) : <div className="text-muted text-xs">No {side} scan for this card.</div>}
+        <div className="text-[11px] text-muted">
+          Saving moves this card's lines in the batch only; corner looks aren't saved here. Pre-grading still measures the copy afresh.
+        </div>
+      </div>
+    </div>
   );
 }

@@ -672,14 +672,20 @@ export type Pt = [number, number];
 export interface BatchSide {
   ok: boolean; crop: string; thumb: string; crop_size: [number, number]; quad: Pt[]; outer: Pt[] | null; inner: Pt[] | null;
   lr: number | null; tb: number | null; lr_err: number | null; tb_err: number | null; corner_offround_mm: number | null;
-  flags: string[] | null; row: number; col: number;
+  flags: string[] | null; row: number; col: number; engine?: string;
+  inner_mm?: Partial<Record<keyof InnerMM, number | null>> | null;
+  /** the engine's reading, kept when a person adjusted the lines */
+  auto?: BatchSide | null; adjusted_by?: string;
 }
+/** better centered than this share of measured graded copies of one grade */
+export interface BatchRank { grade: string; overall: number; front: number; back: number; n: number; of: string }
 export type BatchVerdict = "centered" | "borderline" | "off_center" | "front_only" | "back_only" | "unmeasured";
 export interface BatchCard {
   id: number; sheet_no: number; pos: number; row: number | null; col: number | null;
   front: BatchSide | null; back: BatchSide | null; card_id: number | null; copy_id: number | null; hidden: boolean; card_name?: string;
   off_center?: Record<string, number>; worse_side?: Record<string, number>; err_pp: number; psa_cap?: string;
   verdict: BatchVerdict; p10?: Record<string, number> | null;
+  rank?: BatchRank[] | null; psa_gem_rate?: { pct: number; pop_total: number } | null;
 }
 export interface BatchSheet {
   id: number; sheet_no: number; front_preview: string | null; back_preview: string | null;

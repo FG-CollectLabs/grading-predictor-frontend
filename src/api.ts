@@ -1,5 +1,5 @@
 import type {
-  BatchDetail, BatchSummary, CenteringAnalytics, CenteringOdds, CardHit, SettingValue, RawFeedback, RawCalibration, ConditionReview, ConditionFindings,
+  BatchDetail, InnerMM, Quad, BatchSummary, CenteringAnalytics, CenteringOdds, CardHit, SettingValue, RawFeedback, RawCalibration, ConditionReview, ConditionFindings,
   Card,
   CardDetail,
   CertRow,
@@ -222,6 +222,12 @@ export const api = {
     post<{ copy_id: number }>(`/v1/batch-scans/${id}/cards/${cid}/promote`, { card_id: cardId }),
   swapBatchBack: (id: number, cid: number, other: number) => post<unknown>(`/v1/batch-scans/${id}/cards/${cid}/swap-back`, { with: other }),
   hideBatchCard: (id: number, cid: number, hidden: boolean) => patch<unknown>(`/v1/batch-scans/${id}/cards/${cid}`, { hidden }),
+  /** name the card without pre-grading it (0 clears): odds use its own gem rate */
+  nameBatchCard: (id: number, cid: number, cardId: number) => patch<unknown>(`/v1/batch-scans/${id}/cards/${cid}`, { card_id: cardId }),
+  adjustBatchCentering: (id: number, cid: number, side: "front" | "back", outer_quad: Quad, inner_mm: InnerMM) =>
+    post<unknown>(`/v1/batch-scans/${id}/cards/${cid}/centering`, { side, outer_quad, inner_mm }),
+  resetBatchCentering: (id: number, cid: number, side: "front" | "back") =>
+    post<unknown>(`/v1/batch-scans/${id}/cards/${cid}/centering`, { side, reset: true }),
   deleteBatch: async (id: number) => {
     const res = await fetch(`${BASE}/v1/batch-scans/${id}`, { method: "DELETE", headers: authHeaders() });
     if (!res.ok) throw apiError(res.status, await res.json().catch(() => ({})), `DELETE batch: ${res.status}`);
