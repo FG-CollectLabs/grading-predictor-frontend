@@ -22,6 +22,7 @@ import Sets from "./pages/analytics/Sets";
 import SetCards from "./pages/analytics/SetCards";
 import CardAnalytics from "./pages/analytics/CardAnalytics";
 import Settings from "./pages/Settings";
+import AccountButton from "./components/AccountButton";
 import Developer from "./pages/Developer";
 import GraderAnalytics from "./pages/GraderAnalytics";
 import PhotoError from "./pages/PhotoError";
@@ -49,11 +50,12 @@ function Header() {
           </span>
         </Link>
         <span className="text-muted text-xs hidden sm:inline">pre-grading dataset</span>
+        <AccountButton className="ml-auto" />
         <a
           href="https://github.com/FG-CollectLabs/grading-predictor-frontend"
           target="_blank"
           rel="noreferrer"
-          className="ml-auto text-xs text-muted hover:text-accent transition-colors"
+          className="text-xs text-muted hover:text-accent transition-colors hidden sm:inline"
         >
           github
         </a>

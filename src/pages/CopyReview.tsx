@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { api, getToken, imageUrl } from "../api";
+import { currentSession } from "../lib/auth";
 import type { CenteringMeasurement, CopyDetail, CopyList, CopyPhoto, ReviewSteps, StepDecision, StepId } from "../types";
 import CenteringEditor from "../components/CenteringEditor";
 import ConditionStep from "../components/ConditionStep";
@@ -337,10 +338,12 @@ export default function CopyReview() {
         <div className="text-red-400">{missing ? `Copy #${copyId} not found.` : error}</div>
         {missing && (
           <div className="text-xs text-muted max-w-md mx-auto">
-            {getToken()
-              ? "If it's one of our in-hand scans, the API token saved in this browser isn't accepted. "
-              : "If it's one of our in-hand scans, it's private: this browser has no API token saved. "}
-            <Link to="/settings" className="text-accent hover:underline">Settings → API token</Link>
+            {currentSession()
+              ? `If it's one of our in-hand scans, ${currentSession()!.email} isn't allowed to see it. `
+              : getToken()
+                ? "If it's one of our in-hand scans, the API token saved in this browser isn't accepted. "
+                : "If it's one of our in-hand scans, it's private: sign in with Google (top right), or "}
+            <Link to="/settings" className="text-accent hover:underline">Settings</Link>
           </div>
         )}
       </div>
