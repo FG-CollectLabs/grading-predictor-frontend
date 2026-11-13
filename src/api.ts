@@ -38,6 +38,8 @@ import type {
   Setting,
 } from "./types";
 
+import { authReady, idToken } from "./lib/auth";
+
 const BASE = import.meta.env.VITE_API_URL ?? "http://localhost:8084";
 // The admin token is entered once per browser (Settings → API token) and kept
 // in localStorage; it is no longer built into the site, which anyone can read.
@@ -65,7 +67,8 @@ export async function checkToken(t: string): Promise<boolean | null> {
 }
 // what a failed write says: a rejected token points at Settings
 function apiError(status: number, err: unknown, fallback: string): Error {
-  if (status === 401) return new Error("API token missing or not accepted: paste ADMIN_API_TOKEN under Settings → API token");
+  if (status === 401) return new Error("Not signed in: use Sign in (top right), or paste the API token under Settings");
+  if (status === 403) return new Error((err as { message?: string }).message ?? "This Google account isn't allowed");
   return new Error((err as { message?: string }).message ?? fallback);
 }
 const MARKET_BASE = import.meta.env.VITE_MARKET_API_URL ?? "https://market.futuregadgetlabs.com";
@@ -76,22 +79,28 @@ export function imageUrl(path: string): string {
   return `${base}/${path}`;
 }
 
-function authHeaders(): HeadersInit {
-  const t = getToken();
+// the signed-in Google account (any device) first, else this browser's
+// saved token
+async function bearer(): Promise<string> {
+  await authReady();
+  return (await idToken()) || getToken();
+}
+async function authHeaders(): Promise<Record<string, string>> {
+  const t = await bearer();
   return t ? { Authorization: `Bearer ${t}` } : {};
 }
 
 // every GET carries the token when there is one: in-hand scans (private
 // copies) are only shown to a token holder
 async function get<T>(path: string): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, { headers: authHeaders() });
+  const res = await fetch(`${BASE}${path}`, { headers: await authHeaders() });
   if (!res.ok) throw new Error(`GET ${path}: ${res.status}`);
   return res.json() as Promise<T>;
 }
 
 // GET with the admin token (endpoints that show reviewer details)
 async function getAuthed<T>(path: string): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, { headers: authHeaders() });
+  const res = await fetch(`${BASE}${path}`, { headers: await authHeaders() });
   if (!res.ok) throw new Error(`GET ${path}: ${res.status}`);
   return res.json() as Promise<T>;
 }
@@ -99,7 +108,7 @@ async function getAuthed<T>(path: string): Promise<T> {
 async function post<T>(path: string, body: unknown): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", ...authHeaders() },
+    headers: { "Content-Type": "application/json", ...(await authHeaders()) },
     body: JSON.stringify(body),
   });
   if (!res.ok) {
@@ -112,7 +121,7 @@ async function post<T>(path: string, body: unknown): Promise<T> {
 async function patch<T>(path: string, body: unknown): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     method: "PATCH",
-    headers: { "Content-Type": "application/json", ...authHeaders() },
+    headers: { "Content-Type": "application/json", ...(await authHeaders()) },
     body: JSON.stringify(body),
   });
   if (!res.ok) {
@@ -140,7 +149,7 @@ export const api = {
   deleteCard: async (id: number) => {
     const res = await fetch(`${BASE}/v1/cards/${id}`, {
       method: "DELETE",
-      headers: authHeaders(),
+      headers: await authHeaders(),
     });
     if (!res.ok) throw new Error(`DELETE /v1/cards/${id}: ${res.status}`);
   },
@@ -149,7 +158,7 @@ export const api = {
     form.append("image", file);
     const res = await fetch(`${BASE}/v1/cards/${cardId}/image`, {
       method: "POST",
-      headers: authHeaders(),
+      headers: await authHeaders(),
       body: form,
     });
     if (!res.ok) throw new Error(`card image upload: ${res.status}`);
@@ -171,7 +180,7 @@ export const api = {
   deleteCert: async (id: number) => {
     const res = await fetch(`${BASE}/v1/certs/${id}`, {
       method: "DELETE",
-      headers: authHeaders(),
+      headers: await authHeaders(),
     });
     if (!res.ok) throw new Error(`DELETE /v1/certs/${id}: ${res.status}`);
   },
@@ -190,7 +199,7 @@ export const api = {
     form.append("image", file);
     const res = await fetch(`${BASE}/v1/certs/${certId}/images`, {
       method: "POST",
-      headers: authHeaders(),
+      headers: await authHeaders(),
       body: form,
     });
     if (!res.ok) throw new Error(`image upload: ${res.status}`);
@@ -231,25 +240,24 @@ export const api = {
   /** mark the cards by hand (start: measure right away) */
   putBatchLayout: async (id: number, layout: BatchLayout, start: boolean) => {
     const res = await fetch(`${BASE}/v1/batch-scans/${id}/layout`, {
-      method: "PUT", headers: { "Content-Type": "application/json", ...authHeaders() }, body: JSON.stringify({ ...layout, start }),
+      method: "PUT", headers: { "Content-Type": "application/json", ...(await authHeaders()) }, body: JSON.stringify({ ...layout, start }),
     });
     if (!res.ok) throw apiError(res.status, await res.json().catch(() => ({})), `PUT layout: ${res.status}`);
   },
   /** back to finding the cards automatically */
   deleteBatchLayout: async (id: number) => {
-    const res = await fetch(`${BASE}/v1/batch-scans/${id}/layout`, { method: "DELETE", headers: authHeaders() });
+    const res = await fetch(`${BASE}/v1/batch-scans/${id}/layout`, { method: "DELETE", headers: await authHeaders() });
     if (!res.ok) throw apiError(res.status, await res.json().catch(() => ({})), `DELETE layout: ${res.status}`);
   },
   deleteBatch: async (id: number) => {
-    const res = await fetch(`${BASE}/v1/batch-scans/${id}`, { method: "DELETE", headers: authHeaders() });
+    const res = await fetch(`${BASE}/v1/batch-scans/${id}`, { method: "DELETE", headers: await authHeaders() });
     if (!res.ok) throw apiError(res.status, await res.json().catch(() => ({})), `DELETE batch: ${res.status}`);
   },
   // one file per request (Cloudflare refuses bodies over 100 MB); progress 0..1
   uploadBatchFile: (id: number, file: File, side: string, onProgress: (f: number) => void) =>
-    new Promise<void>((resolve, reject) => {
+    bearer().then((t) => new Promise<void>((resolve, reject) => {
       const x = new XMLHttpRequest();
       x.open("POST", `${BASE}/v1/batch-scans/${id}/files`);
-      const t = getToken();
       if (t) x.setRequestHeader("Authorization", `Bearer ${t}`);
       x.upload.onprogress = (e) => { if (e.lengthComputable) onProgress(e.loaded / e.total); };
       x.onload = () => {
@@ -263,7 +271,7 @@ export const api = {
       form.append("side", side);
       form.append("file", file);
       x.send(form);
-    }),
+    })),
   searchCards: (q: string) => get<{ cards: CardHit[] }>(`/v1/analytics/card-search?q=${encodeURIComponent(q)}`),
   getCenteringOdds: (p: URLSearchParams) => get<CenteringOdds>(`/v1/analytics/centering/odds?${p.toString()}`),
   getPrediction: (copyId: number) => get<Prediction>(`/v1/predict/${copyId}`),
@@ -275,7 +283,7 @@ export const api = {
     form.append("card_id", String(cardId));
     form.append("front", front);
     form.append("back", back);
-    const res = await fetch(`${BASE}/v1/predict`, { method: "POST", headers: authHeaders(), body: form });
+    const res = await fetch(`${BASE}/v1/predict`, { method: "POST", headers: await authHeaders(), body: form });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw apiError(res.status, err, `predict: ${res.status}`);
@@ -293,7 +301,7 @@ export const api = {
   uploadReference: async (cardId: number, file: File) => {
     const form = new FormData();
     form.append("image", file);
-    const res = await fetch(`${BASE}/v1/cards/${cardId}/reference`, { method: "POST", headers: authHeaders(), body: form });
+    const res = await fetch(`${BASE}/v1/cards/${cardId}/reference`, { method: "POST", headers: await authHeaders(), body: form });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw apiError(res.status, err, `upload: ${res.status}`);

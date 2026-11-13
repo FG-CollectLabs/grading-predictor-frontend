@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { api, checkToken, cleanToken, getToken, setToken } from "../api";
+import AccountButton from "../components/AccountButton";
+import { useAuth } from "../lib/auth";
 import type { Setting, SettingValue } from "../types";
 
 // Operating settings (backend internal/predictor/settings.go): AI job sizes,
@@ -177,8 +179,10 @@ function IdsInput({ value, bad, onChange }: { value: number[]; bad: boolean; onC
 }
 
 // the admin token for this browser (kept in localStorage, never in the build);
-// checked against the API on load and before saving
+// checked against the API on load and before saving. Not needed when signed
+// in with Google.
 function TokenBox() {
+  const { available, session } = useAuth();
   const [v, setV] = useState("");
   const [state, setState] = useState<"none" | "checking" | "ok" | "bad" | "unknown">(() => (getToken() ? "checking" : "none"));
   const [msg, setMsg] = useState<string | null>(null);
@@ -200,14 +204,25 @@ function TokenBox() {
     ok: ["text-green", "set and accepted"], bad: ["text-red-400", "set but rejected by the API: paste the current token"],
     unknown: ["text-muted", "set (couldn't check)"] }[state];
   return (
-    <div className="mt-2 mb-3 bg-surface border border-border rounded p-2 text-xs flex flex-wrap items-center gap-2">
+    <div className="mt-2 mb-3 bg-surface border border-border rounded p-2 text-xs space-y-2">
+    {available && (
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="font-semibold">Account</span>
+        {session ? <span className="text-green">signed in: saving, review and in-hand scans work on this device</span>
+          : <span className="text-yellow">signed out</span>}
+        <AccountButton />
+      </div>
+    )}
+    <div className="flex flex-wrap items-center gap-2">
       <span className="font-semibold">API token</span>
+      {available && <span className="text-muted">(only needed without sign-in)</span>}
       <span className={label[0]}>{label[1]}</span>
       <input type="password" value={v} onChange={(e) => setV(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") void save(); }}
         placeholder="paste ADMIN_API_TOKEN" className="bg-bg border border-border rounded px-2 py-1 outline-none focus:border-accent w-72" />
       <button disabled={!v.trim() || state === "checking"} onClick={() => void save()} className="border border-accent/40 text-accent rounded px-2 py-1 disabled:opacity-40">save</button>
       {state !== "none" && <button onClick={remove} className="border border-border text-muted rounded px-2 py-1">remove</button>}
       {msg && <span className="text-muted">{msg}</span>}
+    </div>
     </div>
   );
 }
