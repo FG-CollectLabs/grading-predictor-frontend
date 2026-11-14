@@ -66,11 +66,23 @@ export default function GraderAnalytics() {
   return (
     <section className="space-y-6 max-w-6xl">
       <div>
-        <div className="flex items-baseline gap-3">
-          <h1 className="text-base font-semibold">Grader analytics · centering vs grade</h1>
-          <Link to="/grader-analytics/photo-error" className="text-xs text-accent hover:underline">listing photos vs in-hand scans →</Link>
-          <Link to="/grader-analytics/reports" className="text-xs text-accent hover:underline">set reports: ding points, near-centre thesis, what 9s have →</Link>
+        <div className="grid gap-3 mb-5" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))" }}>
+          {[
+            { to: "/grader-analytics/reports/in-print", kicker: "Thesis", title: "Can graders tell 50/50 from 52/48?",
+              body: "Every in-print set pooled: where the odds of a 10 start to fall, and whether near-perfect centering earns anything." },
+            { to: "/grader-analytics/reports", kicker: "Reports", title: "Set reports",
+              body: "Per set and rarity (IRs, SIRs…): ding points, what the 9s have, and a card-by-card audit of reviewed copies." },
+            { to: "/grader-analytics/photo-error", kicker: "Accuracy", title: "Listing photos vs in-hand scans",
+              body: "How far measurements from sellers' photos are from the same card scanned in hand." },
+          ].map((t) => (
+            <Link key={t.to} to={t.to} className="block border border-border rounded-md p-4 bg-surface hover:border-accent/60 hover:bg-accent/5 transition-colors">
+              <div className="text-[10px] uppercase tracking-widest text-accent">{t.kicker}</div>
+              <div className="text-sm font-semibold mt-1">{t.title} →</div>
+              <div className="text-xs text-muted mt-1 leading-relaxed">{t.body}</div>
+            </Link>
+          ))}
         </div>
+        <h1 className="text-base font-semibold">Explore: centering vs grade</h1>
         <p className="text-xs text-muted mt-1 max-w-3xl">
           How each point off-center changes the odds of each grade, learned from the graded copies the factory has measured.
           Only centering is measured so far: corners, edges and surface are assumed clean.

@@ -706,12 +706,15 @@ export interface ReportCurve { axis: "front" | "back"; note: string; bins: Repor
 export interface ReportThesis { core_n: number; core_p: number; near_n: number; near_p: number; diff: number; diff_lo: number; diff_hi: number; verdict: string; detectable: number }
 export interface ReportIssue { key: string; label: string; in_9: number; in_10: number; lift: number; n9: number }
 export interface ReportCause { key: string; label: string; share: number; n: number }
-export interface ReportCard { card_id: number; name: string; number: string; rarity: string; n: number; top: number; p: number; front_median: number; back_median: number; top_9_issue?: string }
+export interface ReportCard { card_id: number; name: string; number: string; rarity: string; n: number; top: number; p: number; front_median: number; back_median: number; top_9_issue?: string; reviewed: number; checked: number }
+export interface ReportRun { at: string; copies: number; reviewed: number; top_copies: number; run_by: string | null;
+  headline: { front_ding: DingPoint | null; back_ding: DingPoint | null; front: ReportThesis; back: ReportThesis; front_reviewed_only: ReportThesis } }
+export interface AuditCopy { id: number; grade: string; top: boolean; front_off: number; back_off: number; trust: "reviewed" | "engine" | "flagged"; condition_checked: boolean; front_image: string | null; source: string | null }
 export interface GraderReport {
   title: string; scope: string; sets: string[]; grader: string; top_grade: string; rarity: string; rarities: string[];
   copies: number; top_copies: number; reviewed: number; median_err_pp: number; summary: string[]; curves: ReportCurve[];
   thesis: { front: ReportThesis; back: ReportThesis; front_reviewed_only: ReportThesis };
   causes: ReportCause[]; issues: ReportIssue[] | null; where: ReportIssue[] | null; checked: [number, number];
-  subgrades: ReportCause[] | null; subgrade_n: number; cards: ReportCard[] | null; notes: string[]; generated_at: string;
+  subgrades: ReportCause[] | null; subgrade_n: number; cards: ReportCard[] | null; notes: string[]; generated_at: string; history?: ReportRun[];
 }
 export interface ReportSet { set_code: string; set_name: string; release_date: string; copies: number; rarities: Record<string, number> }
