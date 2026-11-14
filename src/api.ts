@@ -1,5 +1,5 @@
 import type {
-  BatchDetail, BatchLayout, InnerMM, Quad, BatchSummary, CenteringAnalytics, CenteringOdds, CardHit, SettingValue, RawFeedback, RawCalibration, ConditionReview, ConditionFindings,
+  BatchDetail, BatchLayout, GraderReport, ReportSet, InnerMM, Quad, BatchSummary, CenteringAnalytics, CenteringOdds, CardHit, SettingValue, RawFeedback, RawCalibration, ConditionReview, ConditionFindings,
   Card,
   CardDetail,
   CertRow,
@@ -273,6 +273,9 @@ export const api = {
       x.send(form);
     })),
   searchCards: (q: string) => get<{ cards: CardHit[] }>(`/v1/analytics/card-search?q=${encodeURIComponent(q)}`),
+  reportSets: (grader: string) => get<{ sets: ReportSet[]; in_print_since: string }>(`/v1/reports/sets?grader=${grader}`),
+  getReport: (scope: string, grader: string, rarity: string) =>
+    get<GraderReport>(`${scope === "in-print" ? "/v1/reports/in-print" : `/v1/reports/sets/${encodeURIComponent(scope)}`}?grader=${grader}&rarity=${encodeURIComponent(rarity)}`),
   getCenteringOdds: (p: URLSearchParams) => get<CenteringOdds>(`/v1/analytics/centering/odds?${p.toString()}`),
   getPrediction: (copyId: number) => get<Prediction>(`/v1/predict/${copyId}`),
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

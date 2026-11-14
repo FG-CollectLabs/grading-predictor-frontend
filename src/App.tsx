@@ -22,6 +22,7 @@ import Sets from "./pages/analytics/Sets";
 import SetCards from "./pages/analytics/SetCards";
 import CardAnalytics from "./pages/analytics/CardAnalytics";
 import Settings from "./pages/Settings";
+import { GraderReportPage, GraderReportsIndex } from "./pages/GraderReports";
 import AccountButton from "./components/AccountButton";
 import Developer from "./pages/Developer";
 import GraderAnalytics from "./pages/GraderAnalytics";
@@ -121,6 +122,8 @@ export default function App() {
             <Route path="/copies/:id" element={<CopyReview />} />
             <Route path="/grader-analytics" element={<GraderAnalytics />} />
             <Route path="/grader-analytics/photo-error" element={<PhotoError />} />
+            <Route path="/grader-analytics/reports" element={<GraderReportsIndex />} />
+            <Route path="/grader-analytics/reports/:scope" element={<GraderReportPage />} />
             <Route path="/developer" element={<Developer />} />
             <Route path="/settings" element={<Settings />} />
           </Routes>

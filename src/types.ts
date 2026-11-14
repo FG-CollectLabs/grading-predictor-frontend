@@ -698,3 +698,20 @@ export interface BatchSheet {
   pairing: { layout: string | null; mismatch_mm: number | null } | null; warnings: string[] | null;
 }
 export interface BatchDetail { batch: BatchSummary; sheets: BatchSheet[]; cards: BatchCard[]; odds_basis: string; notes: string[] }
+
+// ── grader reports (backend reports.go) ──
+export interface ReportBin { from: number; to: number; n: number; top: number; p: number; lo: number; hi: number; sparse?: boolean }
+export interface DingPoint { k: number; lo: number; hi: number; ratio: string; plateau: number; drop_per_pt: number; n: number; note?: string }
+export interface ReportCurve { axis: "front" | "back"; note: string; bins: ReportBin[]; ding?: DingPoint | null }
+export interface ReportThesis { core_n: number; core_p: number; near_n: number; near_p: number; diff: number; diff_lo: number; diff_hi: number; verdict: string; detectable: number }
+export interface ReportIssue { key: string; label: string; in_9: number; in_10: number; lift: number; n9: number }
+export interface ReportCause { key: string; label: string; share: number; n: number }
+export interface ReportCard { card_id: number; name: string; number: string; rarity: string; n: number; top: number; p: number; front_median: number; back_median: number; top_9_issue?: string }
+export interface GraderReport {
+  title: string; scope: string; sets: string[]; grader: string; top_grade: string; rarity: string; rarities: string[];
+  copies: number; top_copies: number; reviewed: number; median_err_pp: number; summary: string[]; curves: ReportCurve[];
+  thesis: { front: ReportThesis; back: ReportThesis; front_reviewed_only: ReportThesis };
+  causes: ReportCause[]; issues: ReportIssue[] | null; where: ReportIssue[] | null; checked: [number, number];
+  subgrades: ReportCause[] | null; subgrade_n: number; cards: ReportCard[] | null; notes: string[]; generated_at: string;
+}
+export interface ReportSet { set_code: string; set_name: string; release_date: string; copies: number; rarities: Record<string, number> }
