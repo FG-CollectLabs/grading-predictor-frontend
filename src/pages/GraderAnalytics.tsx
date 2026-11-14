@@ -69,6 +69,7 @@ export default function GraderAnalytics() {
         <div className="flex items-baseline gap-3">
           <h1 className="text-base font-semibold">Grader analytics · centering vs grade</h1>
           <Link to="/grader-analytics/photo-error" className="text-xs text-accent hover:underline">listing photos vs in-hand scans →</Link>
+          <Link to="/grader-analytics/reports" className="text-xs text-accent hover:underline">set reports: ding points, near-centre thesis, what 9s have →</Link>
         </div>
         <p className="text-xs text-muted mt-1 max-w-3xl">
           How each point off-center changes the odds of each grade, learned from the graded copies the factory has measured.
