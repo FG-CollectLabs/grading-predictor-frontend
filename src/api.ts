@@ -1,5 +1,5 @@
 import type {
-  BatchDetail, BatchLayout, GraderReport, ReportSet, InnerMM, Quad, BatchSummary, CenteringAnalytics, CenteringOdds, CardHit, SettingValue, RawFeedback, RawCalibration, ConditionReview, ConditionFindings,
+  BatchDetail, BatchLayout, GraderReport, ReportSet, AuditCopy, InnerMM, Quad, BatchSummary, CenteringAnalytics, CenteringOdds, CardHit, SettingValue, RawFeedback, RawCalibration, ConditionReview, ConditionFindings,
   Card,
   CardDetail,
   CertRow,
@@ -274,8 +274,10 @@ export const api = {
     })),
   searchCards: (q: string) => get<{ cards: CardHit[] }>(`/v1/analytics/card-search?q=${encodeURIComponent(q)}`),
   reportSets: (grader: string) => get<{ sets: ReportSet[]; in_print_since: string }>(`/v1/reports/sets?grader=${grader}`),
-  getReport: (scope: string, grader: string, rarity: string) =>
-    get<GraderReport>(`${scope === "in-print" ? "/v1/reports/in-print" : `/v1/reports/sets/${encodeURIComponent(scope)}`}?grader=${grader}&rarity=${encodeURIComponent(rarity)}`),
+  getReport: (scope: string, grader: string, rarity: string, fresh = false) =>
+    get<GraderReport>(`${scope === "in-print" ? "/v1/reports/in-print" : `/v1/reports/sets/${encodeURIComponent(scope)}`}?grader=${grader}&rarity=${encodeURIComponent(rarity)}${fresh ? "&fresh=1" : ""}`),
+  reportCardCopies: (cardId: number, grader: string) =>
+    get<{ copies: AuditCopy[]; top_grade: string }>(`/v1/reports/cards/${cardId}/copies?grader=${grader}`),
   getCenteringOdds: (p: URLSearchParams) => get<CenteringOdds>(`/v1/analytics/centering/odds?${p.toString()}`),
   getPrediction: (copyId: number) => get<Prediction>(`/v1/predict/${copyId}`),
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
