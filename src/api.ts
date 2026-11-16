@@ -1,5 +1,5 @@
 import type {
-  BatchDetail, BatchLayout, GraderReport, ReportSet, AuditCopy, InnerMM, Quad, BatchSummary, CenteringAnalytics, CenteringOdds, CardHit, SettingValue, RawFeedback, RawCalibration, ConditionReview, ConditionFindings,
+  BatchDetail, BatchLayout, GraderReport, ReportSet, AuditCopy, AIRush, InnerMM, Quad, BatchSummary, CenteringAnalytics, CenteringOdds, CardHit, SettingValue, RawFeedback, RawCalibration, ConditionReview, ConditionFindings,
   Card,
   CardDetail,
   CertRow,
@@ -337,6 +337,12 @@ export const api = {
   postCondition: (id: number, body: { by: "user"; findings: ConditionFindings; photo_ok?: boolean; note?: string }) =>
     post<{ id: number; corners_clean: boolean; edges_clean: boolean }>(`/v1/copies/${id}/condition`, body),
   inspectUrl: (id: number, side: "front" | "back", v: number | string = "") => `${BASE}/v1/copies/${id}/inspect/${side}.jpg?v=${v}`,
+  /** one corner tile or edge strip of a side's inspection sheet */
+  inspectPartUrl: (id: number, side: "front" | "back", part: string, v: number | string = "") =>
+    `${BASE}/v1/copies/${id}/inspect/${side}.jpg?part=${part}&v=${v}`,
+  /** every AI check on this copy now (agent2's rush worker picks it up within a minute) */
+  requestAIRush: (id: number) => post<AIRush>(`/v1/copies/${id}/ai-rush`, {}),
+  getAIRush: (id: number) => get<{ request: AIRush | null }>(`/v1/copies/${id}/ai-rush`),
   markBought: (id: number, bought: boolean, priceCents?: number) =>
     post<CopyDetail>(`/v1/copies/${id}/bought`, { bought, price_cents: priceCents }),
   rotatePhoto: (id: number, side: "front" | "back", degrees: 90 | 180 | 270) =>

@@ -718,3 +718,8 @@ export interface GraderReport {
   subgrades: ReportCause[] | null; subgrade_n: number; cards: ReportCard[] | null; notes: string[]; generated_at: string; history?: ReportRun[];
 }
 export interface ReportSet { set_code: string; set_name: string; release_date: string; copies: number; rarities: Record<string, number> }
+
+export interface AIRush {
+  id: number; copy_id: number; requested_by: string | null; requested_at: string; claimed_at: string | null; done_at: string | null;
+  result: Record<string, string> | null; error: string | null; state: "waiting" | "running" | "done" | "failed"; ahead?: number;
+}
