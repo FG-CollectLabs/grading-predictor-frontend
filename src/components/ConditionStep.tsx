@@ -92,17 +92,6 @@ export default function ConditionStep({ kind, copyId, version, onDone }: {
           ? "Each corner, front and back: whitening, a softened or rounded tip, dings / bends, foil chipping. Slab plastic, rails and glare aren't damage."
           : "Each edge between the corners (card below the strip): whitening or chips, a rough cut, dents, layer splits, ink. Slab plastic and glare aren't damage."}
       </div>
-      <div className="grid xl:grid-cols-2 gap-3">
-        {(["front", "back"] as const).map((side) => (
-          <div key={side} className="bg-surface border border-border rounded p-2">
-            <div className="text-[10px] uppercase tracking-widest text-muted mb-1">{side}</div>
-            <a href={api.inspectUrl(copyId, side, version)} target="_blank" rel="noreferrer">
-              <img src={api.inspectUrl(copyId, side, version)} alt={`${side} inspection sheet`} className="w-full rounded bg-bg"
-                onError={(e) => { (e.target as HTMLImageElement).alt = "no measured outline for this side yet"; }} />
-            </a>
-          </div>
-        ))}
-      </div>
       <div className="bg-surface border border-border rounded p-2 space-y-1">
         <div className="flex flex-wrap gap-2 items-baseline">
           <span className="font-semibold">AI check</span>
@@ -116,39 +105,20 @@ export default function ConditionStep({ kind, copyId, version, onDone }: {
           {mine && <span className="text-green ml-auto">you reviewed this {new Date(mine.created_at).toLocaleDateString()}</span>}
         </div>
       </div>
-      <div className="overflow-x-auto">
-        <table className="text-[11px] w-full">
-          <thead className="text-[10px] text-muted">
-            <tr>
-              <th className="text-left font-normal py-1">{kind === "corners" ? "corner" : "edge"}</th>
-              {ISSUES[kind].map(([k, l]) => <th key={k} className="text-left font-normal">{l}</th>)}
-            </tr>
-          </thead>
-          <tbody>
-            {(["front", "back"] as const).flatMap((side) => PARTS[kind].map((p) => (
-              <tr key={side + p} className="border-t border-border">
-                <td className="py-1 pr-2 whitespace-nowrap">{side} · {label(p)}</td>
-                {ISSUES[kind].map(([iss]) => {
-                  const v = (grid[side]?.[kind]?.[p]?.[iss] ?? "none") as Severity;
-                  const aiV = ai?.findings?.[side]?.[kind]?.[p]?.[iss];
-                  return (
-                    <td key={iss} className="pr-2">
-                      <div className="flex gap-0.5">
-                        {SEV.map((sv) => (
-                          <button key={sv} onClick={() => set(side, p, iss, sv)} title={aiV ? `AI said ${aiV}` : undefined}
-                            className={`border rounded px-1 text-[9px] ${v === sv ? SEV_CLS[sv] + " bg-bg" : "border-transparent text-border hover:text-muted"} ${aiV === sv && v !== sv ? "underline" : ""}`}>
-                            {sv === "none" ? "ok" : sv}
-                          </button>
-                        ))}
-                      </div>
-                    </td>
-                  );
-                })}
-              </tr>
-            )))}
-          </tbody>
-        </table>
-      </div>
+      {(["front", "back"] as const).map((side) => (
+        <div key={side} className="space-y-2">
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] uppercase tracking-widest text-muted">{side}</span>
+            <a href={api.inspectUrl(copyId, side, version)} target="_blank" rel="noreferrer" className="text-[10px] text-muted hover:text-accent">whole sheet ↗</a>
+          </div>
+          <div className={kind === "corners" ? "grid gap-2 md:grid-cols-2" : "space-y-2"}>
+            {PARTS[kind].map((p) => (
+              <PartRow key={p} kind={kind} side={side} part={p} src={api.inspectPartUrl(copyId, side, p, version)}
+                values={grid[side]?.[kind]?.[p] ?? {}} ai={ai?.findings?.[side]?.[kind]?.[p]} set={(iss, v) => set(side, p, iss, v)} />
+            ))}
+          </div>
+        </div>
+      ))}
       <div className="text-[10px] text-muted">Underlined: the AI's call where yours differs. "unsure" = the photo can't show it.</div>
       <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} placeholder="note (optional): e.g. whitening on the back top-left, only visible at full size"
         className="w-full bg-bg border border-border rounded px-2 py-1 outline-none focus:border-accent" />
@@ -158,6 +128,57 @@ export default function ConditionStep({ kind, copyId, version, onDone }: {
         </button>
         {ai && <span className="text-[10px] text-muted">{agrees ? "same as the AI's call" : "differs from the AI's call (saved as a correction)"}</span>}
         {err && <span className="text-red-400">{err}</span>}
+      </div>
+    </div>
+  );
+}
+
+// one corner or edge: its close-up next to the AI's call and yours
+function PartRow({ kind, side, part, src, values, ai, set }: {
+  kind: "corners" | "edges"; side: "front" | "back"; part: string; src: string;
+  values: Record<string, string>; ai?: Record<string, string>; set: (issue: string, v: Severity) => void;
+}) {
+  const [zoom, setZoom] = useState(false);
+  const aiFlags = Object.entries(ai ?? {}).filter(([, v]) => v !== "none");
+  const mineFlags = Object.values(values).filter((v) => v !== "none").length;
+  const corner = kind === "corners";
+  const img = corner ? (
+    <img src={src} alt={`${side} ${label(part)}`} onClick={() => setZoom(!zoom)} title="click to enlarge"
+      className={`rounded bg-bg cursor-zoom-in ${zoom ? "w-[420px] max-w-full" : "w-40 h-40 object-contain"}`}
+      onError={(e) => { (e.target as HTMLImageElement).alt = "no measured outline for this side yet"; }} />
+  ) : (
+    <a href={src} target="_blank" rel="noreferrer" title="open full size">
+      <img src={src} alt={`${side} ${label(part)} edge`} className="w-full rounded bg-bg"
+        onError={(e) => { (e.target as HTMLImageElement).alt = "no measured outline for this side yet"; }} />
+    </a>
+  );
+  return (
+    <div className={`bg-surface border rounded p-2 ${mineFlags ? "border-yellow/50" : "border-border"} ${corner ? "flex gap-3 items-start" : "space-y-2"}`}>
+      {img}
+      <div className="space-y-1.5 min-w-0 flex-1">
+        <div className="flex flex-wrap items-baseline gap-2">
+          <span className="font-semibold">{side} · {label(part)}</span>
+          <span className="text-[10px] text-muted">
+            AI: {ai ? (aiFlags.length ? aiFlags.map(([k, v]) => `${k.replace("_", " ")} ${v}`).join(", ") : "clean") : "not checked"}
+          </span>
+        </div>
+        <div className={corner ? "space-y-1" : "flex flex-wrap gap-x-4 gap-y-1"}>
+          {ISSUES[kind].map(([iss, l]) => {
+            const v = (values[iss] ?? "none") as Severity;
+            const aiV = ai?.[iss];
+            return (
+              <div key={iss} className="flex items-center gap-1">
+                <span className="text-[10px] text-muted w-24 shrink-0">{l}</span>
+                {SEV.map((sv) => (
+                  <button key={sv} onClick={() => set(iss, sv)} title={aiV ? `AI said ${aiV}` : undefined}
+                    className={`border rounded px-1 text-[9px] ${v === sv ? SEV_CLS[sv] + " bg-bg" : "border-transparent text-border hover:text-muted"} ${aiV === sv && v !== sv ? "underline" : ""}`}>
+                    {sv === "none" ? "ok" : sv}
+                  </button>
+                ))}
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );

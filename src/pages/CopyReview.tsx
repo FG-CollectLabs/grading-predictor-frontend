@@ -5,6 +5,7 @@ import { currentSession } from "../lib/auth";
 import type { CenteringMeasurement, CopyDetail, CopyList, CopyPhoto, ReviewSteps, StepDecision, StepId } from "../types";
 import CenteringEditor from "../components/CenteringEditor";
 import ConditionStep from "../components/ConditionStep";
+import AIRushButton from "../components/AIRushButton";
 import CopyOdds from "../components/CopyOdds";
 import { FLAG_LABELS, StatusBadge, gradeText } from "./Copies";
 
@@ -64,6 +65,8 @@ export default function CopyReview() {
   const [dupOf, setDupOf] = useState<CopyDetail | null>(null);
   const [fixGrade, setFixGrade] = useState(false);
   const [note, setNote] = useState("");
+  // bumped when an AI rush finishes: the corners / edges step reloads its findings
+  const [aiTick, setAiTick] = useState(0);
 
   const loadCopy = useCallback(async () => {
     const c = await api.getCopy(copyId);
@@ -73,6 +76,14 @@ export default function CopyReview() {
     setCert(c.cert_number);
     return c;
   }, [copyId]);
+
+  // after an AI rush: the copy, its steps, measurements and AI findings again
+  const reloadAll = useCallback(async () => {
+    const [, s, m] = await Promise.all([loadCopy(), api.getSteps(copyId), api.getCentering(copyId)]);
+    setSteps(s);
+    setCentering(m.measurements);
+    setAiTick((t) => t + 1);
+  }, [copyId, loadCopy]);
 
   useEffect(() => {
     setError(null);
@@ -396,6 +407,7 @@ export default function CopyReview() {
             {flags.map((f) => <span key={f} className="text-[10px] text-orange-300 border border-orange-300/30 rounded px-1.5">{FLAG_LABELS[f] ?? f}</span>)}
           </div>
         )}
+        <AIRushButton copyId={copy.id} onDone={reloadAll} />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-[260px_1fr] gap-4">
@@ -684,7 +696,7 @@ export default function CopyReview() {
           })}
 
           {(active === "corners" || active === "edges") && (
-            <ConditionStep key={active} kind={active} copyId={copy.id} version={centering.filter((m) => m.status !== "superseded").map((m) => m.id).join("-")}
+            <ConditionStep key={`${active}-${aiTick}`} kind={active} copyId={copy.id} version={centering.filter((m) => m.status !== "superseded").map((m) => m.id).join("-")}
               onDone={(decision, info) => record(active, decision, { payload: info })} />
           )}
 
