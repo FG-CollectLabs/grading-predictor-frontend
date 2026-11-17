@@ -519,6 +519,8 @@ export interface RefQueueItem {
 export interface SetSummary {
   set_code: string; set_name: string; language: string; game: string; era: string;
   release_date: string | null; cards: number; copies: number; measured: number; psa10: number; psa9: number; image: string | null;
+  /** the set's official logo, when known */
+  logo?: string | null;
 }
 export interface SetCard {
   id: number; card_name: string; card_number: string; rarity: string | null; image_url: string | null;
@@ -722,4 +724,16 @@ export interface ReportSet { set_code: string; set_name: string; release_date: s
 export interface AIRush {
   id: number; copy_id: number; requested_by: string | null; requested_at: string; claimed_at: string | null; done_at: string | null;
   result: Record<string, string> | null; error: string | null; state: "waiting" | "running" | "done" | "failed"; ahead?: number;
+}
+
+// ── dataset completion (backend completion.go) ──
+export interface GroupCompletion { key: string; label: string; target: number; measured: number; reviewed: number; waiting: number; total: number }
+export interface CardCompletion { card_id: number; name: string; number: string; rarity: string | null; raw_usd: number | null; image: string | null;
+  groups: GroupCompletion[]; completion: number; measured: number; reviewed: number; waiting: number }
+export interface SetCompletion { set_code: string; set_name: string; release_date: string | null; logo: string | null; image: string | null;
+  cards: number; groups: number; complete_groups: number; completion: number; measured: number; reviewed: number; waiting: number }
+export interface NextStep { kind: "review" | "pipeline" | "supply" | "almost"; title: string; detail: string; link: string }
+export interface CompletionResp {
+  game: string; computed_at: string; targets: { base: number; top: number; top_min_raw_usd: number };
+  sets?: SetCompletion[]; set?: SetCompletion | null; cards?: CardCompletion[]; next: NextStep[] | null;
 }
