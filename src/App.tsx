@@ -23,6 +23,7 @@ import SetCards from "./pages/analytics/SetCards";
 import CardAnalytics from "./pages/analytics/CardAnalytics";
 import Settings from "./pages/Settings";
 import { GraderReportPage, GraderReportsIndex } from "./pages/GraderReports";
+import Completion from "./pages/Completion";
 import AccountButton from "./components/AccountButton";
 import Developer from "./pages/Developer";
 import GraderAnalytics from "./pages/GraderAnalytics";
@@ -97,7 +98,7 @@ export default function App() {
         <main className="px-6 py-6">
           <Routes>
             <Route path="/" element={<Games />} />
-            <Route path="/games/pokemon" element={<Sets />} />
+            <Route path="/games/:game" element={<Sets />} />
             <Route path="/sets/:code" element={<SetCards />} />
             <Route path="/cards/:id" element={<CardAnalytics />} />
             <Route path="/cards/:id/legacy" element={<CardDetail />} />
@@ -123,6 +124,7 @@ export default function App() {
             <Route path="/grader-analytics" element={<GraderAnalytics />} />
             <Route path="/grader-analytics/photo-error" element={<PhotoError />} />
             <Route path="/grader-analytics/reports" element={<GraderReportsIndex />} />
+            <Route path="/grader-analytics/completion" element={<Completion />} />
             <Route path="/grader-analytics/reports/:scope" element={<GraderReportPage />} />
             <Route path="/developer" element={<Developer />} />
             <Route path="/settings" element={<Settings />} />

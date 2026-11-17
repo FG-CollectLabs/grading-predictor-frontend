@@ -72,6 +72,8 @@ export default function GraderAnalytics() {
               body: "Every in-print set pooled: where the odds of a 10 start to fall, and whether near-perfect centering earns anything." },
             { to: "/grader-analytics/reports", kicker: "Reports", title: "Set reports",
               body: "Per set and rarity (IRs, SIRs…): ding points, what the 9s have, and a card-by-card audit of reviewed copies." },
+            { to: "/grader-analytics/completion", kicker: "Progress", title: "Dataset completion",
+              body: "How complete each set's and card's graded data is, per grader and grade, and what to do next." },
             { to: "/grader-analytics/photo-error", kicker: "Accuracy", title: "Listing photos vs in-hand scans",
               body: "How far measurements from sellers' photos are from the same card scanned in hand." },
           ].map((t) => (

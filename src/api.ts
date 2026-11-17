@@ -1,5 +1,5 @@
 import type {
-  BatchDetail, BatchLayout, GraderReport, ReportSet, AuditCopy, AIRush, InnerMM, Quad, BatchSummary, CenteringAnalytics, CenteringOdds, CardHit, SettingValue, RawFeedback, RawCalibration, ConditionReview, ConditionFindings,
+  BatchDetail, BatchLayout, GraderReport, ReportSet, AuditCopy, AIRush, CompletionResp, InnerMM, Quad, BatchSummary, CenteringAnalytics, CenteringOdds, CardHit, SettingValue, RawFeedback, RawCalibration, ConditionReview, ConditionFindings,
   Card,
   CardDetail,
   CertRow,
@@ -216,8 +216,10 @@ export const api = {
 
   getIngestStatus: () => get<IngestStatus>("/v1/ingest/status"),
   getFactory: () => get<FactoryStats>("/v1/factory"),
-  getSets: (language: string) =>
-    get<{ sets: SetSummary[]; languages: Record<string, number>; eras: string[]; as_of: string }>(`/v1/analytics/sets?game=pokemon${language ? `&language=${language}` : ""}`),
+  getCompletion: (game: string, set = "", fresh = false) =>
+    get<CompletionResp>(`/v1/analytics/completion?game=${game}${set ? `&set=${encodeURIComponent(set)}` : ""}${fresh ? "&fresh=1" : ""}`),
+  getSets: (language: string, game = "pokemon") =>
+    get<{ sets: SetSummary[]; languages: Record<string, number>; eras: string[]; as_of: string }>(`/v1/analytics/sets?game=${game}${language ? `&language=${language}` : ""}`),
   getSetCards: (code: string, language: string) =>
     get<{ cards: SetCard[] }>(`/v1/analytics/sets/${encodeURIComponent(code)}/cards?language=${language}`),
   getCardAnalytics: (id: number) => get<CardAnalytics>(`/v1/analytics/cards/${id}`),

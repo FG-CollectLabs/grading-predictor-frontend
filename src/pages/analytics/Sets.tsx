@@ -1,12 +1,15 @@
 import { useEffect, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import { api } from "../../api";
 import type { SetSummary } from "../../types";
 
 // Sets of a game (PokeData /sets style): language tabs, eras newest first.
 const LANGS: [string, string][] = [["en", "English"], ["ja", "Japanese"], ["zh", "Chinese"]];
 
+const GAME_NAME: Record<string, string> = { pokemon: "Pokémon", riftbound: "Riftbound" };
+
 export default function Sets() {
+  const { game = "pokemon" } = useParams();
   const [params, setParams] = useSearchParams();
   const lang = params.get("language") ?? "en";
   const [sets, setSets] = useState<SetSummary[] | null>(null);
@@ -17,18 +20,18 @@ export default function Sets() {
 
   useEffect(() => {
     setSets(null);
-    api.getSets(lang).then((r) => { setSets(r.sets); setLangs(r.languages); setEras(r.eras); }).catch((e: unknown) => setErr(String(e)));
-  }, [lang]);
+    api.getSets(game === "pokemon" ? lang : "", game).then((r) => { setSets(r.sets); setLangs(r.languages); setEras(r.eras); }).catch((e: unknown) => setErr(String(e)));
+  }, [lang, game]);
 
   const shown = (sets ?? []).filter((s) => !q || s.set_name.toLowerCase().includes(q.toLowerCase()));
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2 text-xs text-muted">
-        <Link to="/" className="hover:text-accent">Analytics</Link><span className="text-border">/</span><span className="text-[#e6edf3]">Pokémon</span>
+        <Link to="/" className="hover:text-accent">Analytics</Link><span className="text-border">/</span><span className="text-[#e6edf3]">{GAME_NAME[game] ?? game}</span>
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        <h1 className="text-lg font-semibold mr-2">Pokémon sets</h1>
-        {LANGS.map(([k, label]) => (
+        <h1 className="text-lg font-semibold mr-2">{GAME_NAME[game] ?? game} sets</h1>
+        {game === "pokemon" && LANGS.map(([k, label]) => (
           <button key={k} onClick={() => setParams({ language: k })}
             className={`px-3 py-1 text-xs rounded border ${lang === k ? "border-accent text-accent bg-accent/10" : "border-border text-muted hover:text-[#e6edf3]"}`}>
             {label}{langs[k] ? <span className="opacity-60"> · {langs[k].toLocaleString()}</span> : null}
@@ -49,7 +52,8 @@ export default function Sets() {
               {list.map((s) => (
                 <Link key={s.set_code} to={`/sets/${encodeURIComponent(s.set_code)}?language=${s.language}`}
                   className="bg-surface border border-border rounded-md p-2 hover:border-accent/60 flex gap-2">
-                  {s.image ? <img src={s.image} alt="" loading="lazy" className="w-12 h-16 object-contain bg-bg rounded" /> : <div className="w-12 h-16 bg-bg rounded" />}
+                  {s.logo ? <img src={s.logo} alt={`${s.set_name} logo`} loading="lazy" className="w-16 h-16 object-contain rounded shrink-0" />
+                    : s.image ? <img src={s.image} alt="" loading="lazy" className="w-12 h-16 object-contain bg-bg rounded shrink-0" /> : <div className="w-12 h-16 bg-bg rounded shrink-0" />}
                   <div className="min-w-0">
                     <div className="text-xs font-semibold truncate" title={s.set_name}>{s.set_name}</div>
                     <div className="text-[10px] text-muted">{s.release_date?.slice(0, 10) ?? "—"} · {s.cards} cards</div>
