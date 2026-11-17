@@ -137,6 +137,8 @@ async function marketGet<T>(path: string): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+const authImageCache = new Map<string, Promise<string>>();
+
 export const api = {
   listCards: () => get<Card[]>("/v1/cards"),
   getCard: (id: number) => get<CardDetail>(`/v1/cards/${id}`),
@@ -338,6 +340,22 @@ export const api = {
   getCondition: (id: number) => get<{ reviews: ConditionReview[]; issues: Record<string, Record<string, boolean>>; parts: Record<string, Record<string, boolean>> }>(`/v1/copies/${id}/condition`),
   postCondition: (id: number, body: { by: "user"; findings: ConditionFindings; photo_ok?: boolean; note?: string }) =>
     post<{ id: number; corners_clean: boolean; edges_clean: boolean }>(`/v1/copies/${id}/condition`, body),
+  /** an image from an API path that needs the sign-in (private copies such
+   * as in-hand scans answer 404 without it, and <img> can't send it): fetched
+   * with auth, returned as a local object URL; cached per URL */
+  authImage: (url: string): Promise<string> => {
+    let p = authImageCache.get(url);
+    if (!p) {
+      p = (async () => {
+        const res = await fetch(url, { headers: await authHeaders() });
+        if (!res.ok) throw new Error(`image ${res.status}`);
+        return URL.createObjectURL(await res.blob());
+      })();
+      p.catch(() => authImageCache.delete(url));
+      authImageCache.set(url, p);
+    }
+    return p;
+  },
   inspectUrl: (id: number, side: "front" | "back", v: number | string = "") => `${BASE}/v1/copies/${id}/inspect/${side}.jpg?v=${v}`,
   /** one corner tile or edge strip of a side's inspection sheet */
   inspectPartUrl: (id: number, side: "front" | "back", part: string, v: number | string = "") =>

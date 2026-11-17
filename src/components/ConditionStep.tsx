@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../api";
+import AuthImg, { openAuthImage } from "./AuthImg";
 import type { ConditionFindings, ConditionReview, Severity, StepDecision } from "../types";
 
 // Steps 6 / 7: corners or edges. Both sides' inspection sheets (cut along the
@@ -109,7 +110,7 @@ export default function ConditionStep({ kind, copyId, version, onDone }: {
         <div key={side} className="space-y-2">
           <div className="flex items-center gap-2">
             <span className="text-[10px] uppercase tracking-widest text-muted">{side}</span>
-            <a href={api.inspectUrl(copyId, side, version)} target="_blank" rel="noreferrer" className="text-[10px] text-muted hover:text-accent">whole sheet ↗</a>
+            <button onClick={() => openAuthImage(api.inspectUrl(copyId, side, version))} className="text-[10px] text-muted hover:text-accent">whole sheet ↗</button>
           </div>
           <div className={kind === "corners" ? "grid gap-2 md:grid-cols-2" : "space-y-2"}>
             {PARTS[kind].map((p) => (
@@ -142,15 +143,14 @@ function PartRow({ kind, side, part, src, values, ai, set }: {
   const aiFlags = Object.entries(ai ?? {}).filter(([, v]) => v !== "none");
   const mineFlags = Object.values(values).filter((v) => v !== "none").length;
   const corner = kind === "corners";
+  const none = "no measured outline for this side yet";
   const img = corner ? (
-    <img src={src} alt={`${side} ${label(part)}`} onClick={() => setZoom(!zoom)} title="click to enlarge"
-      className={`rounded bg-bg cursor-zoom-in ${zoom ? "w-[420px] max-w-full" : "w-40 h-40 object-contain"}`}
-      onError={(e) => { (e.target as HTMLImageElement).alt = "no measured outline for this side yet"; }} />
+    <AuthImg src={src} alt={`${side} ${label(part)}`} onClick={() => setZoom(!zoom)} title="click to enlarge" fallback={none}
+      className={`rounded bg-bg cursor-zoom-in ${zoom ? "w-[420px] max-w-full" : "w-40 h-40 object-contain"}`} />
   ) : (
-    <a href={src} target="_blank" rel="noreferrer" title="open full size">
-      <img src={src} alt={`${side} ${label(part)} edge`} className="w-full rounded bg-bg"
-        onError={(e) => { (e.target as HTMLImageElement).alt = "no measured outline for this side yet"; }} />
-    </a>
+    <button type="button" onClick={() => openAuthImage(src)} title="open full size" className="block w-full">
+      <AuthImg src={src} alt={`${side} ${label(part)} edge`} className="w-full min-h-[24px] rounded bg-bg" fallback={none} />
+    </button>
   );
   return (
     <div className={`bg-surface border rounded p-2 ${mineFlags ? "border-yellow/50" : "border-border"} ${corner ? "flex gap-3 items-start" : "space-y-2"}`}>
