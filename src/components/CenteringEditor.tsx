@@ -44,6 +44,7 @@ export function currentMeasurement(ms: CenteringMeasurement[]): CenteringMeasure
 
 export function provenance(m: CenteringMeasurement, all: CenteringMeasurement[]): string {
   if (m.placed_by === "auto") return `auto v${m.detector_version}`;
+  if (m.placed_by === "ai_fix") return `AI-fixed outline (engine v${m.detector_version}, re-checked)`;
   const base = all.find((x) => x.id === m.supersedes);
   const who = m.placed_by.replace(/^user:/, "");
   return base ? `adjusted by ${who} from auto v${base.detector_version}` : `placed by ${who}`;
@@ -281,6 +282,14 @@ export default function CenteringEditor({
       .sort((a, b) => b.id - a.id)[0]?.corners;
   }, [measurements, current]);
 
+  // the AI's outline fix that failed its re-check (outline_fix.go): shown
+  // next to the engine's so a person can take it in one click
+  const aiFix = useMemo(() => {
+    if (!current || !current.flags.includes("ai_fix_failed")) return null;
+    return measurements.filter((m) => m.placed_by === "ai_fix" && m.image_id === current.image_id && m.outer_quad)
+      .sort((a, b) => b.id - a.id)[0] ?? null;
+  }, [measurements, current]);
+
   // moving the outline keeps the inner lines on the printed border
   const moveQuad = useCallback((q: Quad) => {
     if (quad && inner) setInner(anchorInner(quad, q, inner));
@@ -325,6 +334,18 @@ export default function CenteringEditor({
     ctx.setTransform(k, 0, 0, k, PHOTO_W / 2 - pv.cx * k, PHOTO_H / 2 - pv.cy * k);
     ctx.drawImage(bitmapRef.current, 0, 0);
     ctx.setTransform(1, 0, 0, 1, 0, 0);
+    if (aiFix?.outer_quad) {   // the AI's fix: cyan, dotted
+      const fp = aiFix.outer_quad.map(([x, y]) => toScreen(photoFit, pv, PHOTO_W, PHOTO_H, x, y));
+      ctx.setLineDash([2, 3]);
+      for (const [style, width] of [["rgba(0,0,0,0.8)", 3], ["#39d0ff", 1.25]] as const) {
+        ctx.strokeStyle = style;
+        ctx.lineWidth = width;
+        ctx.beginPath();
+        fp.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+        ctx.closePath();
+        ctx.stroke();
+      }
+    }
     const pts = quad.map(([x, y]) => toScreen(photoFit, pv, PHOTO_W, PHOTO_H, x, y));
     ctx.setLineDash(DASH);
     for (const [style, width] of [["rgba(0,0,0,0.8)", 3], ["#ff3b3b", 1.25]] as const) {
@@ -348,7 +369,7 @@ export default function CenteringEditor({
       ctx.moveTo(x, y - 3); ctx.lineTo(x, y + 3);
       ctx.stroke();
     });
-  }, [src, quad, pv, photoFit, selCorner, dragCorner]);
+  }, [src, quad, pv, photoFit, selCorner, dragCorner, aiFix]);
 
   // the straightened card
   const rectImg = useMemo(() => {
@@ -621,6 +642,15 @@ export default function CenteringEditor({
               arrow(e, nudgeCorner);
             }}
           />
+          {aiFix && (
+            <div className="text-[11px] mt-1 flex flex-wrap items-center gap-2 border border-[#39d0ff]/40 rounded px-2 py-1">
+              <span><span className="text-[#39d0ff]">cyan dotted</span>: the AI's fix (its re-check still found it off). <span className="text-red-400">red</span>: the engine's outline.</span>
+              <button className="border border-[#39d0ff]/60 text-[#39d0ff] rounded px-1.5 py-0.5 hover:bg-[#39d0ff]/10"
+                onClick={() => { setQuad(aiFix.outer_quad!.map((p) => [p[0], p[1]]) as Quad); if (aiFix.inner_mm) setInner({ ...aiFix.inner_mm }); }}>
+                use the AI's fix
+              </button>
+            </div>
+          )}
           <div className="flex flex-wrap items-center gap-1 mt-1">
             <span className="text-[10px] text-muted mr-1">outer edge:</span>
             {CORNER_NAMES.map((n, i) => (

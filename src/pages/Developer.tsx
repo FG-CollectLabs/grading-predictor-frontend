@@ -248,8 +248,8 @@ const C_STEPS: { title: string; who: Who; body: string; tag?: string }[] = [
     body: "Anything doubtful is flagged: card cut off, low resolution, bowed or weak edge, edge partly missing, ambiguous outer edge, weak card match, corners not found, low edge contrast, inconsistent or missing inner border. Template-measured sides are 'high'; flagged ones 'low' (a person's queue); the rest 'medium'." },
   { title: "9 · Person review", who: "person", tag: "CenteringEditor",
     body: "In the review screen the person confirms the outer edge first (drag corners, 1-pixel nudges, corner zoom; a confirmed outline makes the engine re-measure the inner border on it), then the inner border lines. Accept, adjust (a new measurement row, the engine's kept) or 'can't measure'. Adjustments become the golden set the engine is scored against (Centering eval on every vision PR) and the source of templates." },
-  { title: "What AI does not do", who: "ai",
-    body: "No AI moves centering lines. The AI jobs pick which photos to measure (step 4 of the pipeline) and judge corners and edges, but centering stays deterministic image processing so it's reproducible and versioned; when the engine is unsure it says so and a person decides." },
+  { title: "AI outline check & fix", who: "ai", tag: "outline_fix.go · worker.ai_fixes",
+    body: "An AI looks at the four corner tiles of each engine outline. Where a corner is off it also estimates how far each edge should move; the engine re-snaps those edges to the strongest real edge within 0.6 mm of the estimate (never a blind move), the AI checks the fixed outline once more, and only if all four corners are then on does the fix become the outline (flag ai_outline_fixed; 15% still go to a person as a sample). Otherwise the copy goes to a person with both outlines shown (ai_fix_failed). Limits: no corner moves over 3 mm, the shape stays within 1.5% of 63 × 88. The inner border and ratios are always the engine's." },
 ];
 
 function Centering() {

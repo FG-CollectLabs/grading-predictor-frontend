@@ -67,6 +67,9 @@ const STATE_LABEL: Record<string, string> = {
 };
 
 export const FLAG_LABELS: Record<string, string> = {
+  ai_outline_fixed: "outline fixed by AI",
+  ai_fix_failed: "AI fix failed: check outline",
+  ai_fix: "AI fix",
   no_front: "no front",
   no_back: "no back",
   single_photo: "1 photo",

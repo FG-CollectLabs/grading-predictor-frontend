@@ -338,7 +338,7 @@ export interface CenteringMeasurement {
   rotation_deg: number | null;
   placed_by: string;
   detector_version: string;
-  status: "proposed" | "accepted" | "superseded" | "rejected";
+  status: "proposed" | "accepted" | "superseded" | "rejected" | "candidate";
   flags: string[];
   tags: string[];
   note: string | null;
