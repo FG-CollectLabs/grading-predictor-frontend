@@ -25,6 +25,8 @@ export default function Templates() {
         top of this list fixes the most copies per review. Take care with the first one of each card: put the corners
         on the cut edge and the lines on the border exactly.
       </p>
+      <Link to="/factory/templates/frame" className="block text-xs text-accent hover:underline">
+        Borderless cards (Riftbound): set up a frame template for a card →</Link>
       {first && (
         <Link to={`/copies/${first.copy_id}?queue=templates&station=front`}
           className="inline-block bg-accent text-bg font-semibold px-4 py-1.5 rounded text-sm">Start: one front per card →</Link>

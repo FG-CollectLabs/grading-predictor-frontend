@@ -12,6 +12,7 @@ import Factory from "./pages/Factory";
 import ReviewHistory from "./pages/ReviewHistory";
 import References from "./pages/References";
 import Templates from "./pages/Templates";
+import FrameTemplates from "./pages/FrameTemplates";
 import Scans from "./pages/Scans";
 import { BatchScans, BatchView } from "./pages/BatchScans";
 import RawCopies from "./pages/RawCopies";
@@ -113,6 +114,7 @@ export default function App() {
             <Route path="/factory/history" element={<ReviewHistory />} />
             <Route path="/factory/references" element={<References />} />
             <Route path="/factory/templates" element={<Templates />} />
+            <Route path="/factory/templates/frame" element={<FrameTemplates />} />
             <Route path="/factory/scans" element={<Scans />} />
             <Route path="/factory/batch" element={<BatchScans />} />
             <Route path="/factory/batch/:id" element={<BatchView />} />

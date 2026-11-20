@@ -737,3 +737,63 @@ export interface CompletionResp {
   game: string; computed_at: string; targets: { base: number; top: number; top_min_raw_usd: number };
   sets?: SetCompletion[]; set?: SetCompletion | null; cards?: CardCompletion[]; next: NextStep[] | null;
 }
+
+// ── defined card templates (frame templates for borderless cards) ──────────
+export type TemplateSides = { left: number; right: number; top: number; bottom: number };
+export interface TemplateCopyReading {
+  copy_id: number;
+  error?: "no_match" | "frame_outside_cut" | "cut_doesnt_fit" | "no_front_photo";
+  inliers?: number;
+  residual_px?: number | null;
+  gaps_mm?: TemplateSides;
+  cut_miss_mm?: { lr: number; tb: number };
+  cut_fixed?: string | null;
+  quad?: Quad;
+  shift_x_mm?: number;
+  shift_y_mm?: number;
+  lr_left_pct?: number;
+  tb_top_pct?: number;
+}
+export interface TemplateValidation {
+  copies: TemplateCopyReading[];
+  matched: number;
+  median_mm: TemplateSides | null;
+  spread_mm: TemplateSides | null;
+  cut_fixed?: number;
+  cut_doesnt_fit?: number;
+}
+export interface CardTemplate {
+  kind: "front" | "back";
+  key: string;
+  card_id?: number;
+  card_name?: string | null;
+  card_number?: string | null;
+  set_name?: string | null;
+  game?: string | null;
+  image_url?: string | null;
+  mode: "border" | "frame";
+  status: "pending" | "draft" | "active" | "failed";
+  reference: { image_id: number; quad?: Quad | null } | null;
+  frame_mm: TemplateSides | null;
+  nominal_mm: TemplateSides | null;
+  nominal_source: "reference" | "median" | "layout" | "manual" | null;
+  validation_copy_ids: number[];
+  validation: TemplateValidation | null;
+  label: string | null;
+  error: string | null;
+  created_by: string;
+  updated_at: string;
+}
+export interface DefineTemplate {
+  mode: "frame" | "border";
+  reference: { image_id: number; quad?: Quad } | null;
+  frame_mm: TemplateSides;
+  nominal: "reference" | "median" | "layout" | "manual";
+  nominal_mm?: TemplateSides;
+  validation_copy_ids: number[];
+  label?: string;
+  by?: string;
+}
+export interface BorderlessCard {
+  id: number; card_name: string; card_number: string; rarity: string | null; image_url: string | null; copies: number; set_name: string;
+}

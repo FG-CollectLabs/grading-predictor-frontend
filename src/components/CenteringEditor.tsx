@@ -90,7 +90,7 @@ function homography(W: number, H: number, q: Quad): number[] {
   return [...solve(A, b), 1];
 }
 
-function warp(src: ImageData, q: Quad, ppmm: number): ImageData {
+export function warp(src: ImageData, q: Quad, ppmm: number): ImageData {
   const W = Math.round(CARD_W * ppmm);
   const H = Math.round(CARD_H * ppmm);
   const h = homography(W, H, q);
