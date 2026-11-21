@@ -753,6 +753,8 @@ export interface TemplateCopyReading {
   shift_y_mm?: number;
   lr_left_pct?: number;
   tb_top_pct?: number;
+  person_gaps_mm?: TemplateSides;
+  vs_person_mm?: TemplateSides;
 }
 export interface TemplateValidation {
   copies: TemplateCopyReading[];
@@ -761,6 +763,8 @@ export interface TemplateValidation {
   spread_mm: TemplateSides | null;
   cut_fixed?: number;
   cut_doesnt_fit?: number;
+  marked?: number;
+  marked_used?: number;
 }
 export interface CardTemplate {
   kind: "front" | "back";
@@ -776,7 +780,8 @@ export interface CardTemplate {
   reference: { image_id: number; quad?: Quad | null } | null;
   frame_mm: TemplateSides | null;
   nominal_mm: TemplateSides | null;
-  nominal_source: "reference" | "median" | "layout" | "manual" | null;
+  nominal_source: "reference" | "median" | "layout" | "manual" | "annotations" | null;
+  ties?: string[];
   validation_copy_ids: number[];
   validation: TemplateValidation | null;
   label: string | null;
@@ -788,12 +793,16 @@ export interface DefineTemplate {
   mode: "frame" | "border";
   reference: { image_id: number; quad?: Quad } | null;
   frame_mm: TemplateSides;
-  nominal: "reference" | "median" | "layout" | "manual";
+  nominal: "reference" | "median" | "layout" | "manual" | "annotations";
   nominal_mm?: TemplateSides;
+  ties?: string[];
   validation_copy_ids: number[];
   label?: string;
   by?: string;
 }
 export interface BorderlessCard {
   id: number; card_name: string; card_number: string; rarity: string | null; image_url: string | null; copies: number; set_name: string;
+}
+export interface TemplateAnnotation {
+  card_id: number; copy_id: number; image_id: number; outer_quad: Quad; gaps_mm: TemplateSides; created_by: string; updated_at: string;
 }
