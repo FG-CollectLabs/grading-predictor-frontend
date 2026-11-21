@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { api, imageUrl } from "../api";
 import AuthImg from "../components/AuthImg";
-import { warp } from "../components/CenteringEditor";
+import CenteringEditor, { warp } from "../components/CenteringEditor";
 import { currentSession } from "../lib/auth";
 import type { BorderlessCard, CardDetail, CardTemplate, CenteringMeasurement, CertRow, Quad, TemplateSides } from "../types";
 
@@ -103,6 +103,7 @@ function Editor({ cardId, onBack }: { cardId: number; onBack: () => void }) {
   const [quad, setQuad] = useState<Quad | null>(null);
   const [frame, setFrame] = useState<TemplateSides>({ left: 4, right: 4, top: 4, bottom: 4 });
   const [nominal, setNominal] = useState<"median" | "layout" | "manual">("median");
+  const [manual, setManual] = useState<TemplateSides | null>(null);
   const [label, setLabel] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -128,6 +129,7 @@ function Editor({ cardId, onBack }: { cardId: number; onBack: () => void }) {
       if (t.frame_mm) setFrame(t.frame_mm);
       if (t.label) setLabel(t.label);
       if (t.nominal_source === "median" || t.nominal_source === "layout" || t.nominal_source === "manual") setNominal(t.nominal_source);
+      if (t.nominal_source === "manual" && t.nominal_mm) setManual(t.nominal_mm);
       if (t.validation_copy_ids.length) setChecked(new Set(t.validation_copy_ids));
     }).catch(() => {});
   }, [cardId, loadTpl]);
@@ -149,12 +151,14 @@ function Editor({ cardId, onBack }: { cardId: number; onBack: () => void }) {
 
   const ref = fronts?.find((f) => f.copy.id === refId) ?? null;
 
-  const save = async () => {
-    if (!ref?.imageId || !quad) return;
+  const save = async (q: Quad, f: TemplateSides) => {
+    if (!ref?.imageId) return;
+    if (nominal === "median" && checked.size < 3) { setErr("check at least 3 copies for a median nominal"); return; }
     setBusy(true); setErr(null);
     try {
       const t = await api.putTemplate(cardId, {
-        mode: "frame", reference: { image_id: ref.imageId, quad }, frame_mm: frame, nominal,
+        mode: "frame", reference: { image_id: ref.imageId, quad: q }, frame_mm: f, nominal,
+        nominal_mm: nominal === "manual" && manual ? manual : undefined,
         validation_copy_ids: [...checked], label: label || undefined, by: currentSession()?.email,
       });
       setTpl(t);
@@ -201,51 +205,50 @@ function Editor({ cardId, onBack }: { cardId: number; onBack: () => void }) {
       </section>
 
       {ref && quad && ref.path && (
-        <div className="grid gap-4 lg:grid-cols-2">
-          <section className="space-y-1">
-            <div className="text-xs font-semibold">2 · The reference's cut: drag the corners onto the card's cut edge</div>
-            <p className="text-[11px] text-muted">Everything is measured from the cut, so take care here: the corners on the card's edge, not the slab's well. Scroll to zoom.</p>
-            <CutEditor path={ref.path} quad={quad} onChange={setQuad} />
-            <button onClick={() => setQuad(ref.quad)} className="text-[11px] text-muted hover:text-accent">reset to the engine's outline</button>
-          </section>
-          <section className="space-y-1">
-            <div className="text-xs font-semibold">3 · The frame: four lines on the straightened card</div>
-            <p className="text-[11px] text-muted">
-              Drag the lines (or type mm from the cut). Put them on something printed the same on every copy (a frame rule,
-              the text box); with the median nominal they only need to be stable, not perfect.
-            </p>
-            <FrameEditor path={ref.path} quad={quad} frame={frame} onChange={setFrame} />
-            <div className="flex flex-wrap items-center gap-2 text-[11px]">
-              {SIDES.map((s) => (
-                <label key={s} className="flex items-center gap-1">{s}
-                  <input value={frame[s]} onChange={(e) => setFrame({ ...frame, [s]: Number(e.target.value) || 0 })}
-                    className="bg-bg border border-border rounded px-1 w-14 font-mono" />mm</label>
-              ))}
-            </div>
-            <div className="flex flex-wrap items-center gap-3 text-[11px]">
-              <label className="flex items-center gap-1">what the lines are
-                <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="gold frame, text box…" className="bg-bg border border-border rounded px-1 w-40" /></label>
-              <label className="flex items-center gap-1">nominal (perfect cut)
-                <select value={nominal} onChange={(e) => setNominal(e.target.value as typeof nominal)} className="bg-bg border border-border rounded px-1">
-                  <option value="median">the checked copies' median</option>
-                  <option value="layout">the game's layout (Riftbound gold frame)</option>
-                </select></label>
-            </div>
-            <button disabled={busy || !ref.imageId || (nominal === "median" && checked.size < 3)} onClick={save}
-              className="bg-accent text-bg font-semibold px-3 py-1 rounded text-xs disabled:opacity-40">
-              {tpl ? "Save and rebuild the draft" : "Build the draft"}</button>
-            {nominal === "median" && checked.size < 3 && <span className="text-[11px] text-amber-300 ml-2">check at least 3 copies for a median</span>}
-          </section>
-        </div>
+        <section className="space-y-2">
+          <div className="text-xs font-semibold">2 · The reference: its cut (outline) and the frame (lines), in the regular centering editor</div>
+          <p className="text-[11px] text-muted max-w-4xl">
+            The outline is the card's cut: put the corners on the card's edge, not the slab's well. The lines are the frame of
+            reference: put them on something printed the same on every copy (the gold frame rule, the text box); with the
+            median nominal they only need to be stable, not perfect. Saving builds (or rebuilds) the draft.
+          </p>
+          <CenteringEditor key={`${ref.copy.id}-${tpl?.updated_at ?? ""}`} copyId={0} side="front" imagePath={ref.path}
+            measurements={[refMeasurement(ref.imageId ?? 0, quad, frame)]} onSaved={() => {}}
+            saveTo={async (q, inner) => { setQuad(q); setFrame(inner); await save(q, inner); }} />
+          <div className="flex flex-wrap items-center gap-3 text-[11px]">
+            <label className="flex items-center gap-1">what the lines are
+              <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="gold frame, text box…" className="bg-bg border border-border rounded px-1 w-40" /></label>
+            <label className="flex items-center gap-1">nominal (perfect cut)
+              <select value={nominal} onChange={(e) => setNominal(e.target.value as typeof nominal)} className="bg-bg border border-border rounded px-1">
+                <option value="median">the checked copies' median</option>
+                <option value="manual">set by you (mm)</option>
+                <option value="layout">the game's layout (Riftbound gold frame)</option>
+              </select></label>
+            {nominal === "median" && checked.size < 3 && <span className="text-amber-300">check at least 3 copies for a median</span>}
+          </div>
+          {nominal === "manual" && (
+            <NominalEditor value={manual ?? tpl?.nominal_mm ?? tpl?.validation?.median_mm ?? frame}
+              median={tpl?.validation?.median_mm ?? null} onChange={setManual} />
+          )}
+          <p className="text-[11px] text-muted">Changed only the copies, the label or the nominal? <button disabled={busy || (nominal === "median" && checked.size < 3)}
+            onClick={() => save(quad, frame)} className="text-accent hover:underline disabled:opacity-40">rebuild the draft with the current lines</button></p>
+        </section>
       )}
 
-      {tpl && <Status tpl={tpl} busy={busy} cardId={cardId} act={act} />}
+      {tpl && <Status tpl={tpl} busy={busy} cardId={cardId} act={act}
+        paths={new Map((fronts ?? []).map((f) => [f.copy.id, f.path]))}
+        onNominal={(n) => { setNominal("manual"); setManual(n); }} />}
     </div>
   );
 }
 
-function Status({ tpl, busy, cardId, act }: { tpl: CardTemplate; busy: boolean; cardId: number; act: (f: () => Promise<unknown>) => void }) {
+function Status({ tpl, busy, cardId, act, paths, onNominal }: {
+  tpl: CardTemplate; busy: boolean; cardId: number; act: (f: () => Promise<unknown>) => void;
+  paths: Map<number, string | null>; onNominal: (n: TemplateSides) => void;
+}) {
   const v = tpl.validation;
+  const [open, setOpen] = useState<number | null>(null);
+  const nom = tpl.nominal_mm;
   return (
     <section className="space-y-2 border-t border-border pt-3">
       <div className="flex items-center gap-3 text-xs">
@@ -266,13 +269,27 @@ function Status({ tpl, busy, cardId, act }: { tpl: CardTemplate; busy: boolean; 
             {v.spread_mm && <> · spread {SIDES.map((s) => `${s[0].toUpperCase()} ${fmt(v.spread_mm![s])}`).join(" · ")} mm</>}
             {!!v.cut_fixed && <> · {v.cut_fixed} cut{v.cut_fixed > 1 ? "s" : ""} found again from the design</>}
           </div>
+          {nom && (
+            <div className="flex flex-wrap items-center gap-2 text-[11px]">
+              <span className="text-muted">The lines should be the same distance from both edges?</span>
+              <button onClick={() => onNominal({ ...nom, left: avg(nom.left, nom.right), right: avg(nom.left, nom.right) })}
+                className="border border-border rounded px-2 py-0.5 hover:text-accent">left = right ({fmt(avg(nom.left, nom.right))} mm)</button>
+              <button onClick={() => onNominal({ ...nom, top: avg(nom.top, nom.bottom), bottom: avg(nom.top, nom.bottom) })}
+                className="border border-border rounded px-2 py-0.5 hover:text-accent">top = bottom ({fmt(avg(nom.top, nom.bottom))} mm)</button>
+              <button onClick={() => onNominal({ ...nom })} className="border border-border rounded px-2 py-0.5 hover:text-accent">edit the numbers</button>
+              <span className="text-muted">then "Save and rebuild the draft" above</span>
+            </div>
+          )}
           <table className="text-xs w-full max-w-5xl">
             <thead><tr className="text-muted text-left border-b border-border">
               <th className="py-1">copy</th><th>gaps L / R / T / B (mm)</th><th>shift x / y (mm)</th><th>L/R</th><th>T/B</th><th>match</th><th>cut</th><th></th>
             </tr></thead>
             <tbody>{v.copies.map((c) => (
               <tr key={c.copy_id} className="border-b border-[#1c2128]">
-                <td className="py-1"><Link to={`/copies/${c.copy_id}`} className="hover:text-accent">#{c.copy_id}</Link></td>
+                <td className="py-1"><Link to={`/copies/${c.copy_id}`} className="hover:text-accent">#{c.copy_id}</Link>
+                  {c.quad && c.gaps_mm && paths.get(c.copy_id) && (
+                    <button onClick={() => setOpen(open === c.copy_id ? null : c.copy_id)} className="ml-2 text-[10px] text-accent hover:underline">
+                      {open === c.copy_id ? "hide" : "view"}</button>)}</td>
                 <td className="font-mono">{c.gaps_mm ? SIDES.map((s) => fmt(c.gaps_mm![s])).join(" / ") : "–"}</td>
                 <td className="font-mono">{c.shift_x_mm != null ? `${fmt(c.shift_x_mm)} / ${fmt(c.shift_y_mm)}` : "–"}</td>
                 <td className="font-mono">{c.lr_left_pct != null ? `${fmt(c.lr_left_pct, 1)}/${fmt(100 - c.lr_left_pct, 1)}` : "–"}</td>
@@ -284,6 +301,11 @@ function Status({ tpl, busy, cardId, act }: { tpl: CardTemplate; busy: boolean; 
               </tr>
             ))}</tbody>
           </table>
+          {open != null && (() => {
+            const c = v.copies.find((x) => x.copy_id === open);
+            const path = paths.get(open);
+            return c?.quad && c.gaps_mm && path ? <AuditView path={path} quad={c.quad} gaps={c.gaps_mm} nominal={nom} copyId={open} /> : null;
+          })()}
           <p className="text-[11px] text-muted max-w-4xl">
             Shift: how far the frame sits from where a perfect cut leaves it (+x right, +y down). L/R and T/B: the same as a
             ratio, 50/50 for a perfect cut whatever the design's gaps. Copies marked "cut doesn't fit" are left out of the
@@ -311,116 +333,91 @@ function usePhoto(path: string): HTMLImageElement | null {
   return img;
 }
 
-function CutEditor({ path, quad, onChange }: { path: string; quad: Quad; onChange: (q: Quad) => void }) {
-  const img = usePhoto(path);
-  const cv = useRef<HTMLCanvasElement>(null);
-  const [view, setView] = useState({ z: 1, cx: 0, cy: 0 });
-  const drag = useRef<number | null>(null);
-  const W = 520;
-  const fit = img ? Math.min(W / img.width, 680 / img.height) : 1;
-  const H = img ? Math.round(img.height * fit) : 400;
-  useEffect(() => { if (img) setView({ z: 1, cx: img.width / 2, cy: img.height / 2 }); }, [img]);
-  // zoom on the wheel without scrolling the page (React's onWheel is passive)
-  useEffect(() => {
-    const c = cv.current; if (!c) return;
-    const h = (e: WheelEvent) => {
-      e.preventDefault();
-      const r = c.getBoundingClientRect();
-      const sx = e.clientX - r.left, sy = e.clientY - r.top;
-      setView((v) => {
-        const kk = fit * v.z;
-        const cx = (sx - W / 2) / kk + v.cx, cy = (sy - H / 2) / kk + v.cy;
-        const z = Math.min(16, Math.max(1, v.z * (e.deltaY < 0 ? 1.25 : 0.8)));
-        return { z, cx: cx - (sx - W / 2) / (fit * z), cy: cy - (sy - H / 2) / (fit * z) };
-      });
-    };
-    c.addEventListener("wheel", h, { passive: false });
-    return () => c.removeEventListener("wheel", h);
-  }, [fit, H]);
-  const k = fit * view.z;
-  const toS = useCallback((x: number, y: number) => [(x - view.cx) * k + W / 2, (y - view.cy) * k + H / 2], [view, k, H]);
-  const toC = useCallback((sx: number, sy: number) => [(sx - W / 2) / k + view.cx, (sy - H / 2) / k + view.cy], [view, k, H]);
-  useEffect(() => {
-    const c = cv.current; if (!c || !img) return;
-    const g = c.getContext("2d")!;
-    g.fillStyle = "#0d1117"; g.fillRect(0, 0, W, H);
-    const [x0, y0] = toS(0, 0);
-    g.drawImage(img, x0, y0, img.width * k, img.height * k);
-    g.strokeStyle = "#ff40ff"; g.lineWidth = 1.5; g.beginPath();
-    quad.forEach(([x, y], i) => { const [sx, sy] = toS(x, y); if (i) g.lineTo(sx, sy); else g.moveTo(sx, sy); });
-    g.closePath(); g.stroke();
-    quad.forEach(([x, y]) => { const [sx, sy] = toS(x, y); g.fillStyle = "#ff40ff"; g.beginPath(); g.arc(sx, sy, 5, 0, 7); g.fill(); });
-  }, [img, quad, toS, k, H]);
-  const pos = (e: React.PointerEvent) => { const r = cv.current!.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+const avg = (a: number, b: number) => Math.round(((a + b) / 2) * 1000) / 1000;
+
+function NominalEditor({ value, median, onChange }: { value: TemplateSides; median: TemplateSides | null; onChange: (n: TemplateSides) => void }) {
   return (
-    <canvas ref={cv} width={W} height={H} className="rounded border border-border touch-none cursor-crosshair"
-      onPointerDown={(e) => {
-        const [sx, sy] = pos(e);
-        let best = -1, bd = 14;
-        quad.forEach(([x, y], i) => { const [qx, qy] = toS(x, y); const d = Math.hypot(qx - sx, qy - sy); if (d < bd) { bd = d; best = i; } });
-        if (best >= 0) { drag.current = best; (e.target as HTMLElement).setPointerCapture(e.pointerId); }
-      }}
-      onPointerMove={(e) => {
-        if (drag.current == null) return;
-        const [x, y] = toC(...(pos(e) as [number, number]));
-        const q = quad.map((p) => [...p]) as Quad;
-        q[drag.current] = [Math.round(x * 10) / 10, Math.round(y * 10) / 10];
-        onChange(q);
-      }}
-      onPointerUp={() => { drag.current = null; }} />
+    <div className="flex flex-wrap items-center gap-2 text-[11px] rounded border border-border p-2">
+      <span className="text-muted">Perfect cut leaves the lines at</span>
+      {SIDES.map((s) => (
+        <label key={s} className="flex items-center gap-1">{s}
+          <input value={value[s]} onChange={(e) => onChange({ ...value, [s]: Number(e.target.value) || 0 })}
+            className="bg-bg border border-border rounded px-1 w-14 font-mono" />mm</label>
+      ))}
+      {median && <span className="text-muted">copies' median: {SIDES.map((s) => `${s[0].toUpperCase()} ${fmt(median[s])}`).join(" · ")}</span>}
+    </div>
   );
 }
 
-function FrameEditor({ path, quad, frame, onChange }: { path: string; quad: Quad; frame: TemplateSides; onChange: (f: TemplateSides) => void }) {
+// One copy straightened by the cut the template used, with the frame lines
+// where the template found them (cyan) and where a perfect cut would put
+// them (dashed): are the lines on the design's frame on this copy?
+function AuditView({ path, quad, gaps, nominal, copyId }: { path: string; quad: Quad; gaps: TemplateSides; nominal: TemplateSides | null; copyId: number }) {
   const img = usePhoto(path);
   const cv = useRef<HTMLCanvasElement>(null);
-  const [rect, setRect] = useState<ImageData | null>(null);
-  const drag = useRef<Side | null>(null);
   const W = Math.round(CARD_W * PPMM), H = Math.round(CARD_H * PPMM);
-  // straighten the reference by its cut (re-done when the cut moves)
+  const [zoom, setZoom] = useState<Side | null>(null);
   useEffect(() => {
-    if (!img) return;
-    const t = setTimeout(() => {
-      const c = document.createElement("canvas");
-      c.width = img.width; c.height = img.height;
-      const g = c.getContext("2d")!;
-      g.drawImage(img, 0, 0);
-      setRect(warp(g.getImageData(0, 0, img.width, img.height), quad, PPMM));
-    }, 150);
-    return () => clearTimeout(t);
-  }, [img, quad]);
-  const linePx = (s: Side) => (s === "left" ? frame.left * PPMM : s === "right" ? W - frame.right * PPMM : s === "top" ? frame.top * PPMM : H - frame.bottom * PPMM);
-  useEffect(() => {
-    const c = cv.current; if (!c) return;
+    const c = cv.current; if (!c || !img) return;
+    const t = document.createElement("canvas"); t.width = img.width; t.height = img.height;
+    const tg = t.getContext("2d")!; tg.drawImage(img, 0, 0);
+    const r = warp(tg.getImageData(0, 0, img.width, img.height), quad, PPMM);
     const g = c.getContext("2d")!;
-    g.fillStyle = "#0d1117"; g.fillRect(0, 0, W, H);
-    if (rect) g.putImageData(rect, 0, 0);
-    g.strokeStyle = "#39d0ff"; g.lineWidth = 1.5;
-    for (const s of SIDES) {
-      const p = linePx(s);
+    const line = (s: Side, mm: number, dash: boolean, color: string) => {
+      g.strokeStyle = color; g.lineWidth = 1; g.setLineDash(dash ? [5, 4] : []);
+      const p = s === "left" ? mm * PPMM : s === "right" ? W - mm * PPMM : s === "top" ? mm * PPMM : H - mm * PPMM;
       g.beginPath();
       if (s === "left" || s === "right") { g.moveTo(p, 0); g.lineTo(p, H); } else { g.moveTo(0, p); g.lineTo(W, p); }
       g.stroke();
+    };
+    c.width = W; c.height = H;
+    g.putImageData(r, 0, 0);
+    if (zoom) {
+      // 4x on the middle of one side, to see the line against the frame rule
+      const cx = zoom === "left" ? gaps.left * PPMM : zoom === "right" ? W - gaps.right * PPMM : W / 2;
+      const cy = zoom === "top" ? gaps.top * PPMM : zoom === "bottom" ? H - gaps.bottom * PPMM : H / 2;
+      const sw = W / 4, sh = H / 4;
+      const t2 = document.createElement("canvas"); t2.width = W; t2.height = H; t2.getContext("2d")!.putImageData(r, 0, 0);
+      g.imageSmoothingEnabled = false;
+      g.drawImage(t2, cx - sw / 2, cy - sh / 2, sw, sh, 0, 0, W, H);
+      g.strokeStyle = "#39d0ff"; g.setLineDash([]); g.beginPath();
+      if (zoom === "left" || zoom === "right") { g.moveTo(W / 2, 0); g.lineTo(W / 2, H); } else { g.moveTo(0, H / 2); g.lineTo(W, H / 2); }
+      g.stroke();
+      return;
     }
-  });
-  const pos = (e: React.PointerEvent) => { const r = cv.current!.getBoundingClientRect(); return [(e.clientX - r.left) * (W / r.width), (e.clientY - r.top) * (H / r.height)]; };
+    for (const s of SIDES) {
+      line(s, gaps[s], false, "#39d0ff");
+      if (nominal) line(s, nominal[s], true, "#ffb340");
+    }
+  }, [img, quad, gaps, nominal, zoom, W, H]);
   return (
-    <canvas ref={cv} width={W} height={H} className="rounded border border-border touch-none cursor-move w-full max-w-[441px]"
-      onPointerDown={(e) => {
-        const [x, y] = pos(e);
-        let best: Side | null = null, bd = 10;
-        for (const s of SIDES) {
-          const d = s === "left" || s === "right" ? Math.abs(x - linePx(s)) : Math.abs(y - linePx(s));
-          if (d < bd) { bd = d; best = s; }
-        }
-        if (best) { drag.current = best; (e.target as HTMLElement).setPointerCapture(e.pointerId); }
-      }}
-      onPointerMove={(e) => {
-        const s = drag.current; if (!s) return;
-        const [x, y] = pos(e);
-        const mm = s === "left" ? x / PPMM : s === "right" ? (W - x) / PPMM : s === "top" ? y / PPMM : (H - y) / PPMM;
-        onChange({ ...frame, [s]: Math.round(Math.min(30, Math.max(0.2, mm)) * 100) / 100 });
-      }}
-      onPointerUp={() => { drag.current = null; }} />
+    <div className="flex flex-wrap gap-3 items-start">
+      <canvas ref={cv} className="rounded border border-border w-full max-w-[441px]" />
+      <div className="text-[11px] space-y-1 max-w-xs">
+        <div className="font-semibold">#{copyId}, straightened by its cut</div>
+        <div><span className="text-[#39d0ff]">cyan</span>: the frame as the template found it on this copy</div>
+        {nominal && <div><span className="text-[#ffb340]">dashed orange</span>: where a perfect cut would put it</div>}
+        <div className="text-muted">Gaps: {SIDES.map((s) => `${s[0].toUpperCase()} ${fmt(gaps[s])}`).join(" · ")} mm</div>
+        <div className="flex flex-wrap gap-1 pt-1">
+          <span className="text-muted">zoom 4×:</span>
+          {SIDES.map((s) => (
+            <button key={s} onClick={() => setZoom(zoom === s ? null : s)}
+              className={`border rounded px-1.5 ${zoom === s ? "border-accent text-accent" : "border-border"}`}>{s}</button>
+          ))}
+        </div>
+        <p className="text-muted">If the cyan line isn't on the frame rule, tell Claude which copy and side. If this copy's cut is
+          wrong, untick it and rebuild so the median ignores it.</p>
+      </div>
+    </div>
   );
+}
+
+// the reference as a measurement for the regular centering editor: its cut
+// as the outline, the frame as the inner border (mm from the cut)
+function refMeasurement(imageId: number, quad: Quad, frame: TemplateSides): CenteringMeasurement {
+  return {
+    id: -1, image_id: imageId, side: "front", image_sha256: null, supersedes: null, outer_quad: quad, px_per_mm: null,
+    inner_mm: { ...frame }, lr_left_pct: null, tb_top_pct: null, lr_err_pp: null, tb_err_pp: null, rotation_deg: null,
+    placed_by: "template", detector_version: "", status: "proposed", flags: [], tags: [], note: null, created_at: "",
+  };
 }
