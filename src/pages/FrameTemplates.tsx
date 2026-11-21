@@ -140,7 +140,11 @@ function Editor({ cardId, onBack }: { cardId: number; onBack: () => void }) {
   }, [cardId, loadTpl]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadMarks = () => api.listAnnotations(cardId)
-    .then((r) => setMarks(new Map(r.annotations.map((a) => [a.copy_id, a])))).catch(() => {});
+    .then((r) => {
+      setMarks(new Map(r.annotations.map((a) => [a.copy_id, a])));
+      // once there are marks, build from them unless you pick otherwise
+      if (r.annotations.length) setNominal((n) => (n === "median" ? "annotations" : n));
+    }).catch(() => {});
 
   // a reference: the template's, else the sharpest copy with an outline
   useEffect(() => {
@@ -261,6 +265,7 @@ function Editor({ cardId, onBack }: { cardId: number; onBack: () => void }) {
       {ref && (
         <section className="space-y-2 border-t border-border pt-3">
           <div className="text-xs font-semibold">3 · Build the template from your marks</div>
+          {marks.size >= 2 && <MarksCheck marks={[...marks.values()]} onEdit={setMarking} />}
           <div className="text-[11px] text-muted">{marks.size} cop{marks.size === 1 ? "y" : "ies"} marked
             {refMark ? ` · reference #${ref.copy.id} marked` : ` · mark the reference (#${ref.copy.id}) so its cut and lines are yours`}</div>
           <div className="flex flex-wrap items-center gap-3 text-[11px]">
@@ -483,4 +488,34 @@ function refMeasurement(imageId: number, quad: Quad, frame: TemplateSides): Cent
     inner_mm: { ...frame }, lr_left_pct: null, tb_top_pct: null, lr_err_pp: null, tb_err_pp: null, rotation_deg: null,
     placed_by: "template", detector_version: "", status: "proposed", flags: [], tags: [], note: null, created_at: "",
   };
+}
+
+// The frame is the same size on every copy, so left + right (and top +
+// bottom) of a person's marks should match across copies; a copy far off
+// the others has its outline or its lines off.
+function MarksCheck({ marks, onEdit }: { marks: TemplateAnnotation[]; onEdit: (copyId: number) => void }) {
+  const lr = marks.map((m) => m.gaps_mm.left + m.gaps_mm.right);
+  const tb = marks.map((m) => m.gaps_mm.top + m.gaps_mm.bottom);
+  const med = (v: number[]) => [...v].sort((a, b) => a - b)[Math.floor(v.length / 2)];
+  const mlr = med(lr), mtb = med(tb);
+  const off = (d: number) => (Math.abs(d) > 0.2 ? "text-amber-300" : "text-muted");
+  return (
+    <div className="text-[11px] space-y-1">
+      <div className="text-muted">
+        Your marks' frame size (should match on every copy: the frame is printed the same size): left + right {fmt(mlr)} mm,
+        top + bottom {fmt(mtb)} mm on the median copy. Over 0.2 mm off (amber): that copy's outline or lines are off.
+      </div>
+      <table className="text-[11px]">
+        <thead><tr className="text-muted text-left"><th className="pr-3">copy</th><th className="pr-3">L + R</th><th className="pr-3">T + B</th><th></th></tr></thead>
+        <tbody>{marks.map((m, i) => (
+          <tr key={m.copy_id}>
+            <td className="pr-3">#{m.copy_id}</td>
+            <td className={`pr-3 font-mono ${off(lr[i] - mlr)}`}>{fmt(lr[i])} ({lr[i] - mlr >= 0 ? "+" : ""}{fmt(lr[i] - mlr)})</td>
+            <td className={`pr-3 font-mono ${off(tb[i] - mtb)}`}>{fmt(tb[i])} ({tb[i] - mtb >= 0 ? "+" : ""}{fmt(tb[i] - mtb)})</td>
+            <td><button onClick={() => onEdit(m.copy_id)} className="text-accent hover:underline">edit</button></td>
+          </tr>
+        ))}</tbody>
+      </table>
+    </div>
+  );
 }
