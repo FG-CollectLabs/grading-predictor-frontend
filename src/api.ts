@@ -18,6 +18,9 @@ import type {
   CopyDetail,
   ReviewRequest,
   CenteringMeasurement,
+  CardTemplate,
+  DefineTemplate,
+  BorderlessCard,
   CenteringAction,
   IngestStatus,
   FactoryStats,
@@ -114,6 +117,19 @@ async function post<T>(path: string, body: unknown): Promise<T> {
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw apiError(res.status, err, `POST ${path}: ${res.status}`);
+  }
+  return res.json() as Promise<T>;
+}
+
+async function send<T>(method: "PUT" | "DELETE", path: string, body?: unknown): Promise<T> {
+  const res = await fetch(`${BASE}${path}`, {
+    method,
+    headers: { ...(body !== undefined ? { "Content-Type": "application/json" } : {}), ...(await authHeaders()) },
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw apiError(res.status, err, `${method} ${path}: ${res.status}`);
   }
   return res.json() as Promise<T>;
 }
@@ -373,6 +389,22 @@ export const api = {
     post<ReviewSteps>(`/v1/copies/${id}/steps`, req),
   getReviewHistory: (limit = 100, offset = 0) => get<{ events: ReviewEvent[] }>(`/v1/review-history?limit=${limit}&offset=${offset}`),
   getCentering: (id: number) => get<{ measurements: CenteringMeasurement[] }>(`/v1/copies/${id}/centering`),
+  // defined card templates (frame templates for borderless cards)
+  listTemplates: (p: Record<string, string>) =>
+    get<{ templates: CardTemplate[]; count: number }>(`/v1/templates?${new URLSearchParams(p).toString()}`),
+  putTemplate: (cardId: number, body: DefineTemplate) => send<CardTemplate>("PUT", `/v1/templates/front/${cardId}`, body),
+  activateTemplate: (cardId: number) => post<{ status: string; remeasuring: number }>(`/v1/templates/front/${cardId}/activate`, {}),
+  deactivateTemplate: (cardId: number) => post<{ status: string; remeasuring: number }>(`/v1/templates/front/${cardId}/deactivate`, {}),
+  deleteTemplate: (cardId: number) => send<{ deleted: boolean; remeasuring: number }>("DELETE", `/v1/templates/front/${cardId}`),
+  /** Riftbound cards with the most copies: where a frame template does the most */
+  borderlessCandidates: async (): Promise<BorderlessCard[]> => {
+    const comp = await get<{ sets: { set_code: string; set_name: string }[] }>(`/v1/analytics/completion?game=riftbound`);
+    const lists = await Promise.all(comp.sets.map((s) =>
+      get<{ cards: { id: number; card_name: string; card_number: string; rarity: string | null; image_url: string | null; copies: number }[] }>(
+        `/v1/analytics/sets/${encodeURIComponent(s.set_code)}/cards`).then((r) => r.cards.map((c) => ({ ...c, set_name: s.set_name })))
+        .catch(() => [])));
+    return lists.flat().filter((c) => c.copies > 0).sort((a, b) => b.copies - a.copies);
+  },
   postCentering: (id: number, req: CenteringAction) =>
     post<{ id: number; measurements: CenteringMeasurement[] }>(`/v1/copies/${id}/centering`, req),
 
