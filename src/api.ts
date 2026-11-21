@@ -19,6 +19,7 @@ import type {
   ReviewRequest,
   CenteringMeasurement,
   CardTemplate,
+  TemplateAnnotation,
   DefineTemplate,
   BorderlessCard,
   CenteringAction,
@@ -396,6 +397,10 @@ export const api = {
   activateTemplate: (cardId: number) => post<{ status: string; remeasuring: number }>(`/v1/templates/front/${cardId}/activate`, {}),
   deactivateTemplate: (cardId: number) => post<{ status: string; remeasuring: number }>(`/v1/templates/front/${cardId}/deactivate`, {}),
   deleteTemplate: (cardId: number) => send<{ deleted: boolean; remeasuring: number }>("DELETE", `/v1/templates/front/${cardId}`),
+  listAnnotations: (cardId: number) => get<{ annotations: TemplateAnnotation[] }>(`/v1/templates/front/${cardId}/annotations`),
+  putAnnotation: (cardId: number, copyId: number, body: { image_id: number; outer_quad: Quad; gaps_mm: InnerMM; by?: string }) =>
+    send<{ saved: boolean }>("PUT", `/v1/templates/front/${cardId}/annotations/${copyId}`, body),
+  deleteAnnotation: (cardId: number, copyId: number) => send<{ deleted: boolean }>("DELETE", `/v1/templates/front/${cardId}/annotations/${copyId}`),
   /** Riftbound cards with the most copies: where a frame template does the most */
   borderlessCandidates: async (): Promise<BorderlessCard[]> => {
     const comp = await get<{ sets: { set_code: string; set_name: string }[] }>(`/v1/analytics/completion?game=riftbound`);
