@@ -42,10 +42,33 @@ export default function FrameTemplates() {
     setCands(null);
     api.borderlessCandidates(game).then(setCands).catch(() => setCands([]));
   }, [game]);
+  const [slim, setSlim] = useState<{ key: string; mode: string; status: string }[] | null>(null);
+  const [filter, setFilter] = useState<"all" | "none" | "progress" | "active">("none");
+  const [shown, setShown] = useState(100);
   useEffect(() => {
     api.listTemplates({ defined: "1" }).then((r) => setDefined(r.templates)).catch(() => {});
   }, []);
-  const status = useMemo(() => new Map(defined.map((t) => [t.key, t.status])), [defined]);
+  useEffect(() => {
+    setSlim(null);
+    api.templatesSlim(game).then(setSlim).catch(() => setSlim([]));
+  }, [game]);
+  // every front template of this game (learned Pokémon border templates count as covered)
+  const status = useMemo(() => {
+    const m = new Map<string, { mode: string; status: string }>();
+    for (const t of slim ?? []) m.set(t.key, t);
+    for (const t of defined) if (!m.has(t.key)) m.set(t.key, { mode: t.mode, status: t.status });
+    return m;
+  }, [slim, defined]);
+  const bucket = (id: number): "none" | "progress" | "active" => {
+    const t = status.get(String(id));
+    return !t ? "none" : t.status === "active" ? "active" : "progress";
+  };
+  const counts = useMemo(() => {
+    const c = { all: 0, none: 0, progress: 0, active: 0 };
+    for (const x of cands ?? []) { c.all++; c[bucket(x.id)]++; }
+    return c;
+  }, [cands, status]); // eslint-disable-line react-hooks/exhaustive-deps
+  const rows = (cands ?? []).filter((c) => filter === "all" || bucket(c.id) === filter);
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2 text-xs text-muted">
@@ -67,20 +90,48 @@ export default function FrameTemplates() {
                   className={`rounded px-3 py-1 text-xs ${game === g ? "bg-accent text-bg font-semibold" : "border border-border hover:text-accent"}`}>{l}</button>
               ))}
             </div>
-            <div className="text-xs font-semibold mb-1">{game === "riftbound" ? "Riftbound" : "Pokémon"} cards, most copies first</div>
-            {!cands ? <div className="text-xs text-muted">loading…</div> : (
+            <div className="text-xs font-semibold mb-1">{game === "riftbound" ? "Riftbound" : "Pokémon"} cards with copies, most copies first</div>
+            {cands && (
+              <div className="space-y-1 mb-2">
+                <div className="text-[11px] text-muted">
+                  {counts.active} of {counts.all} cards measured with an active template ({counts.all ? Math.round((100 * counts.active) / counts.all) : 0}%)
+                  {counts.progress ? ` · ${counts.progress} in progress` : ""} · {counts.none} to go
+                </div>
+                <div className="h-1.5 w-full max-w-md rounded bg-[#1c2128] overflow-hidden flex">
+                  <div className="bg-emerald-500" style={{ width: `${counts.all ? (100 * counts.active) / counts.all : 0}%` }} />
+                  <div className="bg-amber-400" style={{ width: `${counts.all ? (100 * counts.progress) / counts.all : 0}%` }} />
+                </div>
+                <div className="flex flex-wrap gap-1">
+                  {([["none", "No template"], ["progress", "Draft / building"], ["active", "Active"], ["all", "All"]] as const).map(([k, l]) => (
+                    <button key={k} onClick={() => { setFilter(k); setShown(100); }}
+                      className={`rounded px-2 py-0.5 text-[11px] ${filter === k ? "bg-accent text-bg font-semibold" : "border border-border hover:text-accent"}`}>
+                      {l} ({counts[k]})</button>
+                  ))}
+                </div>
+              </div>
+            )}
+            {!cands || slim == null ? <div className="text-xs text-muted">loading…</div> : (
               <table className="text-xs w-full">
                 <thead><tr className="text-muted text-left border-b border-border"><th></th><th>card</th><th>copies</th><th>template</th><th></th></tr></thead>
-                <tbody>{cands.slice(0, 60).map((c) => (
+                <tbody>{rows.slice(0, shown).map((c) => (
                   <tr key={c.id} className="border-b border-[#1c2128]">
                     <td className="py-1">{c.image_url ? <img src={c.image_url} alt="" loading="lazy" className="w-8 h-11 object-contain" /> : null}</td>
                     <td>{c.card_name}<div className="text-[10px] text-muted">{c.set_name} · #{c.card_number}{c.rarity ? ` · ${c.rarity}` : ""}</div></td>
                     <td className="font-mono">{c.copies}</td>
-                    <td className="text-[10px]">{status.get(String(c.id)) ?? <span className="text-muted">none</span>}</td>
+                    <td className="text-[10px]">{(() => {
+                      const t = status.get(String(c.id));
+                      if (!t) return <span className="text-muted">none</span>;
+                      const tone = t.status === "active" ? "text-emerald-300" : t.status === "failed" ? "text-red-400" : "text-amber-300";
+                      return <span className={tone}>{t.status}{t.mode === "border" ? " (border)" : ""}</span>;
+                    })()}</td>
                     <td><button onClick={() => setParams({ card: String(c.id) })} className="text-accent hover:underline">set up →</button></td>
                   </tr>
                 ))}</tbody>
               </table>
+            )}
+            {rows.length > shown && (
+              <button onClick={() => setShown(shown + 200)} className="mt-2 text-[11px] text-accent hover:underline">
+                show more ({rows.length - shown} left)</button>
             )}
           </div>
           <div className="space-y-2">

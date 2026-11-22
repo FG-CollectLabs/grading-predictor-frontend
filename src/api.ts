@@ -394,6 +394,9 @@ export const api = {
   // defined card templates (frame templates for borderless cards)
   listTemplates: (p: Record<string, string>) =>
     get<{ templates: CardTemplate[]; count: number }>(`/v1/templates?${new URLSearchParams(p).toString()}`),
+  /** which cards of a game have which front template (key = card id) */
+  templatesSlim: (game: string) =>
+    get<{ templates: { key: string; mode: string; status: string }[] }>(`/v1/templates?slim=1&game=${encodeURIComponent(game)}`).then((r) => r.templates),
   putTemplate: (cardId: number, body: DefineTemplate) => send<CardTemplate>("PUT", `/v1/templates/front/${cardId}`, body),
   activateTemplate: (cardId: number) => post<{ status: string; remeasuring: number }>(`/v1/templates/front/${cardId}/activate`, {}),
   deactivateTemplate: (cardId: number) => post<{ status: string; remeasuring: number }>(`/v1/templates/front/${cardId}/deactivate`, {}),
