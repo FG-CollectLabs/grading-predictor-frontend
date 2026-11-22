@@ -37,8 +37,12 @@ export default function FrameTemplates() {
   const [cands, setCands] = useState<BorderlessCard[] | null>(null);
   const [defined, setDefined] = useState<CardTemplate[]>([]);
   const [idInput, setIdInput] = useState("");
+  const [game, setGame] = useState<"riftbound" | "pokemon">((params.get("game") as "pokemon") || "riftbound");
   useEffect(() => {
-    api.borderlessCandidates().then(setCands).catch(() => setCands([]));
+    setCands(null);
+    api.borderlessCandidates(game).then(setCands).catch(() => setCands([]));
+  }, [game]);
+  useEffect(() => {
     api.listTemplates({ defined: "1" }).then((r) => setDefined(r.templates)).catch(() => {});
   }, []);
   const status = useMemo(() => new Map(defined.map((t) => [t.key, t.status])), [defined]);
@@ -57,7 +61,13 @@ export default function FrameTemplates() {
       {!cardId ? (
         <div className="grid gap-4 md:grid-cols-[2fr_1fr]">
           <div>
-            <div className="text-xs font-semibold mb-1">Riftbound cards, most copies first</div>
+            <div className="flex items-center gap-1 mb-2">
+              {([["riftbound", "Riftbound"], ["pokemon", "Pokémon"]] as const).map(([g, l]) => (
+                <button key={g} onClick={() => setGame(g)}
+                  className={`rounded px-3 py-1 text-xs ${game === g ? "bg-accent text-bg font-semibold" : "border border-border hover:text-accent"}`}>{l}</button>
+              ))}
+            </div>
+            <div className="text-xs font-semibold mb-1">{game === "riftbound" ? "Riftbound" : "Pokémon"} cards, most copies first</div>
             {!cands ? <div className="text-xs text-muted">loading…</div> : (
               <table className="text-xs w-full">
                 <thead><tr className="text-muted text-left border-b border-border"><th></th><th>card</th><th>copies</th><th>template</th><th></th></tr></thead>
@@ -279,16 +289,7 @@ function Editor({ cardId, onBack }: { cardId: number; onBack: () => void }) {
                 <option value="layout">the game's layout (Riftbound gold frame)</option>
               </select></label>
           </div>
-          {nominal !== "layout" && (
-            <div className="space-y-1 text-[11px]">
-              <div className="text-muted">The design's symmetry (the frame is a fixed size, so these pin the perfect cut from it):</div>
-              {([["left=right", "the left and right lines are the same distance from their edges"],
-                 ["top=sides", "the top line is that same distance from the top edge (the bottom line then takes whatever is left: it's the design's)"]] as const).map(([k, l]) => (
-                <label key={k} className="flex items-center gap-1">
-                  <input type="checkbox" checked={ties.has(k)} onChange={(e) => { const n = new Set(ties); if (e.target.checked) n.add(k); else n.delete(k); setTies(n); }} />{l}</label>
-              ))}
-            </div>
-          )}
+          {nominal !== "layout" && <SymmetryPicker ties={ties} onChange={setTies} marks={[...marks.values()]} />}
           {nominal === "manual" && (
             <NominalEditor value={manual ?? tpl?.nominal_mm ?? tpl?.validation?.median_mm ?? frame}
               median={tpl?.validation?.median_mm ?? null} onChange={setManual} />
@@ -517,5 +518,99 @@ function MarksCheck({ marks, onEdit }: { marks: TemplateAnnotation[]; onEdit: (c
         ))}</tbody>
       </table>
     </div>
+  );
+}
+
+// ── the design's symmetry: which frame lines sit the same distance from
+// their edges. The frame is printed the same size on every copy, so each
+// axis's two gaps add up to a fixed total, and a tie pins the perfect cut.
+const TB_TIES = [
+  ["", "no top/bottom tie (from the marks)"],
+  ["top=bottom", "top = bottom"],
+  ["top=sides", "top matches the sides (the bottom is the design's)"],
+  ["bottom=sides", "bottom matches the sides (the top is the design's)"],
+] as const;
+
+function applyTies(n: TemplateSides, tot: { lr: number; tb: number }, ties: Set<string>): TemplateSides {
+  const o = { ...n };
+  if (ties.has("left=right")) o.left = o.right = tot.lr / 2;
+  if (ties.has("top=bottom")) o.top = o.bottom = tot.tb / 2;
+  const side = (o.left + o.right) / 2;
+  if (ties.has("top=sides")) { o.top = side; o.bottom = tot.tb - side; } else if (ties.has("bottom=sides")) { o.bottom = side; o.top = tot.tb - side; }
+  return o;
+}
+
+function SymmetryPicker({ ties, onChange, marks }: { ties: Set<string>; onChange: (t: Set<string>) => void; marks: TemplateAnnotation[] }) {
+  const med = (v: number[]) => { const a = [...v].sort((x, y) => x - y); const m = Math.floor(a.length / 2); return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2; };
+  const stats = useMemo(() => {
+    if (!marks.length) return null;
+    const g = marks.map((m) => m.gaps_mm);
+    const m = { left: med(g.map((x) => x.left)), right: med(g.map((x) => x.right)), top: med(g.map((x) => x.top)), bottom: med(g.map((x) => x.bottom)) };
+    const tot = { lr: g.reduce((a, x) => a + x.left + x.right, 0) / g.length, tb: g.reduce((a, x) => a + x.top + x.bottom, 0) / g.length };
+    // a suggestion from the marks: sides within 0.15 mm of each other look tied
+    const lrTied = Math.abs(m.left - m.right) < 0.15;
+    const side = lrTied ? tot.lr / 2 : (m.left + m.right) / 2;
+    const opts = [["top=bottom", Math.abs(m.top - m.bottom)], ["top=sides", Math.abs(m.top - side)], ["bottom=sides", Math.abs(m.bottom - side)]] as const;
+    const best = [...opts].sort((a, b) => a[1] - b[1])[0];
+    const sug = new Set<string>([...(lrTied ? ["left=right"] : []), ...(best[1] < 0.2 ? [best[0]] : [])]);
+    return { m, tot, sug, diffs: { lr: Math.abs(m.left - m.right), opts } };
+  }, [marks]);
+  const tb = TB_TIES.find(([k]) => k && ties.has(k))?.[0] ?? "";
+  const setTb = (k: string) => { const n = new Set<string>([...ties].filter((t) => t === "left=right")); if (k) n.add(k); onChange(n); };
+  const preview = stats ? applyTies(stats.m, stats.tot, ties) : null;
+  const same = (a: Set<string>, b: Set<string>) => a.size === b.size && [...a].every((x) => b.has(x));
+  return (
+    <div className="grid gap-3 md:grid-cols-[1fr_auto] text-[11px] rounded border border-border p-2">
+      <div className="space-y-1">
+        <div className="text-muted">Which frame lines are the same distance from their edges (the design's symmetry)?</div>
+        <label className="flex items-center gap-1">
+          <input type="checkbox" checked={ties.has("left=right")} onChange={(e) => {
+            const n = new Set(ties); if (e.target.checked) n.add("left=right"); else n.delete("left=right"); onChange(n);
+          }} />left = right</label>
+        <div className="flex flex-wrap gap-x-3 gap-y-1">
+          {TB_TIES.map(([k, l]) => (
+            <label key={k || "none"} className="flex items-center gap-1">
+              <input type="radio" name="tbtie" checked={tb === k} onChange={() => setTb(k)} />{l}</label>
+          ))}
+        </div>
+        {stats && (
+          <div className="pt-1 space-y-0.5">
+            <div className="text-muted">
+              From your {marks.length} marked cop{marks.length === 1 ? "y" : "ies"} (medians): L {fmt(stats.m.left)} · R {fmt(stats.m.right)} ·
+              T {fmt(stats.m.top)} · B {fmt(stats.m.bottom)} mm. Left vs right differ by {fmt(stats.diffs.lr)};
+              {" "}{stats.diffs.opts.map(([k, d]) => `${k} ${fmt(d)}`).join(" · ")} mm.
+            </div>
+            <div>
+              Suggested: <span className="text-accent">{stats.sug.size ? [...stats.sug].join(" + ") : "no ties (the marks don't line up)"}</span>
+              {!same(stats.sug, ties) && <button onClick={() => onChange(new Set(stats.sug))} className="ml-2 text-accent hover:underline">use it</button>}
+              <span className="text-muted"> · a guess from your marks; you decide.</span>
+            </div>
+          </div>
+        )}
+      </div>
+      {preview && <SymmetryDiagram n={preview} ties={ties} />}
+    </div>
+  );
+}
+
+function SymmetryDiagram({ n, ties }: { n: TemplateSides; ties: Set<string> }) {
+  // the perfect cut's gaps on a card outline; tied sides share a colour
+  const W = 126, H = 176, k = 4.5;
+  const side = ties.has("top=sides") ? ["left", "right", "top"] : ties.has("bottom=sides") ? ["left", "right", "bottom"] : ties.has("left=right") ? ["left", "right"] : [];
+  const tbPair = ties.has("top=bottom") ? ["top", "bottom"] : [];
+  const col = (s: string) => (side.includes(s) ? "#39d0ff" : tbPair.includes(s) ? "#ffb340" : "#8b949e");
+  const x0 = n.left * k, x1 = W - n.right * k, y0 = n.top * k, y1 = H - n.bottom * k;
+  return (
+    <svg width={W + 60} height={H + 20} viewBox={`-30 -10 ${W + 60} ${H + 20}`} className="text-[9px]">
+      <rect x={0} y={0} width={W} height={H} rx={6} fill="none" stroke="#30363d" />
+      <line x1={x0} y1={0} x2={x0} y2={H} stroke={col("left")} />
+      <line x1={x1} y1={0} x2={x1} y2={H} stroke={col("right")} />
+      <line x1={0} y1={y0} x2={W} y2={y0} stroke={col("top")} />
+      <line x1={0} y1={y1} x2={W} y2={y1} stroke={col("bottom")} />
+      <text x={-28} y={H / 2} fill={col("left")}>{fmt(n.left)}</text>
+      <text x={W + 2} y={H / 2} fill={col("right")}>{fmt(n.right)}</text>
+      <text x={W / 2 - 10} y={-2} fill={col("top")}>{fmt(n.top)}</text>
+      <text x={W / 2 - 10} y={H + 9} fill={col("bottom")}>{fmt(n.bottom)}</text>
+    </svg>
   );
 }

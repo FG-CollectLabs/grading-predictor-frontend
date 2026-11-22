@@ -401,9 +401,9 @@ export const api = {
   putAnnotation: (cardId: number, copyId: number, body: { image_id: number; outer_quad: Quad; gaps_mm: InnerMM; by?: string }) =>
     send<{ saved: boolean }>("PUT", `/v1/templates/front/${cardId}/annotations/${copyId}`, body),
   deleteAnnotation: (cardId: number, copyId: number) => send<{ deleted: boolean }>("DELETE", `/v1/templates/front/${cardId}/annotations/${copyId}`),
-  /** Riftbound cards with the most copies: where a frame template does the most */
-  borderlessCandidates: async (): Promise<BorderlessCard[]> => {
-    const comp = await get<{ sets: { set_code: string; set_name: string }[] }>(`/v1/analytics/completion?game=riftbound`);
+  /** a game's cards with the most copies: where a frame template does the most */
+  borderlessCandidates: async (game: "riftbound" | "pokemon" = "riftbound"): Promise<BorderlessCard[]> => {
+    const comp = await get<{ sets: { set_code: string; set_name: string }[] }>(`/v1/analytics/completion?game=${game}`);
     const lists = await Promise.all(comp.sets.map((s) =>
       get<{ cards: { id: number; card_name: string; card_number: string; rarity: string | null; image_url: string | null; copies: number }[] }>(
         `/v1/analytics/sets/${encodeURIComponent(s.set_code)}/cards`).then((r) => r.cards.map((c) => ({ ...c, set_name: s.set_name })))
