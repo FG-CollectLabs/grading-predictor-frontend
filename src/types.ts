@@ -780,8 +780,9 @@ export interface CardTemplate {
   reference: { image_id: number; quad?: Quad | null } | null;
   frame_mm: TemplateSides | null;
   nominal_mm: TemplateSides | null;
-  nominal_source: "reference" | "median" | "layout" | "manual" | "annotations" | null;
+  nominal_source: "reference" | "median" | "layout" | "manual" | "annotations" | "profile" | null;
   ties?: string[];
+  profile_id?: number | null;
   validation_copy_ids: number[];
   validation: TemplateValidation | null;
   label: string | null;
@@ -793,9 +794,10 @@ export interface DefineTemplate {
   mode: "frame" | "border";
   reference: { image_id: number; quad?: Quad } | null;
   frame_mm: TemplateSides;
-  nominal: "reference" | "median" | "layout" | "manual" | "annotations";
+  nominal: "reference" | "median" | "layout" | "manual" | "annotations" | "profile";
   nominal_mm?: TemplateSides;
   ties?: string[];
+  profile_id?: number | null;
   validation_copy_ids: number[];
   label?: string;
   by?: string;
@@ -805,4 +807,11 @@ export interface BorderlessCard {
 }
 export interface TemplateAnnotation {
   card_id: number; copy_id: number; image_id: number; outer_quad: Quad; gaps_mm: TemplateSides; created_by: string; updated_at: string;
+}
+export interface ProfileStats { marks: number; lr_total_mm: number; tb_total_mm: number; nominal_mm: TemplateSides; bottom_minus_top_mm: number }
+export interface LayoutProfile {
+  id: number; game: string; name: string; label: string | null; ties: string[]; card_ids: number[]; rarities: string[]; set_codes: string[];
+  created_by: string; updated_at: string; pooled: ProfileStats | null; relation?: "member" | "suggested";
+  members: { card_id: number; card_name: string; card_number: string; set_name: string; rarity: string | null; marks_stats: ProfileStats | null;
+    template_status: string | null; template_nominal_mm: TemplateSides | null }[];
 }

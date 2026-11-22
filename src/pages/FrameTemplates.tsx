@@ -4,7 +4,7 @@ import { api, imageUrl } from "../api";
 import AuthImg from "../components/AuthImg";
 import CenteringEditor, { warp } from "../components/CenteringEditor";
 import { currentSession } from "../lib/auth";
-import type { BorderlessCard, CardDetail, CardTemplate, CenteringMeasurement, CertRow, Quad, TemplateAnnotation, TemplateSides } from "../types";
+import type { LayoutProfile, BorderlessCard, CardDetail, CardTemplate, CenteringMeasurement, CertRow, Quad, TemplateAnnotation, TemplateSides } from "../types";
 
 // Frame templates: a card's frame of reference for designs without a printed
 // border. Pick a reference copy and confirm its cut, place four lines on the
@@ -112,7 +112,8 @@ function Editor({ cardId, onBack }: { cardId: number; onBack: () => void }) {
   const [checked, setChecked] = useState<Set<number>>(new Set());
   const [quad, setQuad] = useState<Quad | null>(null);
   const [frame, setFrame] = useState<TemplateSides>({ left: 4, right: 4, top: 4, bottom: 4 });
-  const [nominal, setNominal] = useState<"annotations" | "median" | "layout" | "manual">("annotations");
+  const [nominal, setNominal] = useState<"annotations" | "median" | "layout" | "manual" | "profile">("annotations");
+  const [profileId, setProfileId] = useState<number | null>(null);
   const [ties, setTies] = useState<Set<string>>(new Set());
   const [marks, setMarks] = useState<Map<number, TemplateAnnotation>>(new Map());
   const [marking, setMarking] = useState<number | null>(null);
@@ -141,7 +142,8 @@ function Editor({ cardId, onBack }: { cardId: number; onBack: () => void }) {
       if (!t) return;
       if (t.frame_mm) setFrame(t.frame_mm);
       if (t.label) setLabel(t.label);
-      if (t.nominal_source === "median" || t.nominal_source === "layout" || t.nominal_source === "manual" || t.nominal_source === "annotations") setNominal(t.nominal_source);
+      if (t.nominal_source && t.nominal_source !== "reference") setNominal(t.nominal_source);
+      setProfileId(t.profile_id ?? null);
       setTies(new Set(t.ties ?? []));
       if (t.nominal_source === "manual" && t.nominal_mm) setManual(t.nominal_mm);
       if (t.validation_copy_ids.length) setChecked(new Set(t.validation_copy_ids));
@@ -183,15 +185,17 @@ function Editor({ cardId, onBack }: { cardId: number; onBack: () => void }) {
   const save = async (q: Quad, f: TemplateSides) => {
     if (!ref?.imageId) return;
     if (nominal === "median" && checked.size < 3) { setErr("check at least 3 copies for a median nominal"); return; }
-    if (nominal === "annotations" && marks.size < 3 && ties.size < 2) {
-      setErr("a nominal from your marks needs 3 marked copies, or both symmetry ties"); return;
+    if (nominal === "annotations" && marks.size < 3 && !(ties.has("left=right") && ties.size >= 2)) {
+      setErr("a nominal from your marks needs 3 marked copies, or 1 when the symmetry pins both axes"); return;
     }
+    if (nominal === "profile" && !profileId) { setErr("pick a layout profile first"); return; }
     setBusy(true); setErr(null);
     try {
       const t = await api.putTemplate(cardId, {
         mode: "frame", reference: { image_id: ref.imageId, quad: q }, frame_mm: f, nominal,
         nominal_mm: nominal === "manual" && manual ? manual : undefined,
         ties: nominal === "layout" ? [] : [...ties],
+        profile_id: profileId,
         validation_copy_ids: [...checked], label: label || undefined, by: currentSession()?.email,
       });
       setTpl(t);
@@ -287,8 +291,12 @@ function Editor({ cardId, onBack }: { cardId: number; onBack: () => void }) {
                 <option value="median">the checked copies' median (template readings)</option>
                 <option value="manual">set by you (mm)</option>
                 <option value="layout">the game's layout (Riftbound gold frame)</option>
+                {profileId && <option value="profile">the layout profile's pooled perfect cut</option>}
               </select></label>
           </div>
+          {card && <ProfilePanel card={card} cardId={cardId} ties={ties} label={label} profileId={profileId}
+            onUse={(p) => { setProfileId(p.id); setTies(new Set(p.ties)); if (p.label) setLabel(p.label); if (!marks.size) setNominal("profile"); }}
+            onClear={() => setProfileId(null)} />}
           {nominal !== "layout" && <SymmetryPicker ties={ties} onChange={setTies} marks={[...marks.values()]} />}
           {nominal === "manual" && (
             <NominalEditor value={manual ?? tpl?.nominal_mm ?? tpl?.validation?.median_mm ?? frame}
@@ -612,5 +620,106 @@ function SymmetryDiagram({ n, ties }: { n: TemplateSides; ties: Set<string> }) {
       <text x={W / 2 - 10} y={-2} fill={col("top")}>{fmt(n.top)}</text>
       <text x={W / 2 - 10} y={H + 9} fill={col("bottom")}>{fmt(n.bottom)}</text>
     </svg>
+  );
+}
+
+// ── layout profiles: one frame geometry for every card printed with the
+// same layout. Each card keeps its own reference (its art), but the symmetry
+// and the perfect cut are shared; the members table shows whether the cards
+// really agree (the bottom offset, the frame's size).
+function ProfilePanel({ card, cardId, ties, label, profileId, onUse, onClear }: {
+  card: CardDetail; cardId: number; ties: Set<string>; label: string; profileId: number | null;
+  onUse: (p: LayoutProfile) => void; onClear: () => void;
+}) {
+  const [mine, setMine] = useState<LayoutProfile[]>([]);
+  const [all, setAll] = useState<LayoutProfile[]>([]);
+  const [name, setName] = useState("");
+  const [rar, setRar] = useState("");
+  const [sets, setSets] = useState(card.set_code);
+  const [err, setErr] = useState<string | null>(null);
+  const load = useCallback(() => {
+    api.listProfiles({ card_id: String(cardId) }).then((r) => setMine(r.profiles)).catch(() => {});
+    api.listProfiles({ game: card.game }).then((r) => setAll(r.profiles)).catch(() => {});
+  }, [cardId, card.game]);
+  useEffect(() => { load(); }, [load]);
+  const current = all.find((p) => p.id === profileId) ?? mine.find((p) => p.relation === "member") ?? null;
+  const by = currentSession()?.email;
+  const join = async (p: LayoutProfile) => {
+    setErr(null);
+    try {
+      const np = await api.putProfile({ id: p.id, game: p.game, name: p.name, label: p.label ?? undefined, ties: p.ties,
+        card_ids: [...new Set([...p.card_ids, cardId])], rarities: p.rarities, set_codes: p.set_codes, by });
+      onUse(np); load();
+    } catch (e) { setErr(String(e)); }
+  };
+  const create = async () => {
+    setErr(null);
+    try {
+      const np = await api.putProfile({ game: card.game, name: name.trim(), label: label || undefined, ties: [...ties], card_ids: [cardId],
+        rarities: rar.split(",").map((x) => x.trim()).filter(Boolean), set_codes: sets.split(",").map((x) => x.trim()).filter(Boolean), by });
+      onUse(np); load(); setName("");
+    } catch (e) { setErr(String(e)); }
+  };
+  const P = (st: { nominal_mm: TemplateSides } | null | undefined) => st ? SIDES.map((s) => `${s[0].toUpperCase()} ${fmt(st.nominal_mm[s])}`).join(" · ") : "–";
+  return (
+    <div className="rounded border border-border p-2 space-y-2 text-[11px]">
+      <div className="font-semibold text-xs">Layout profile <span className="font-normal text-muted">(shared by cards printed with the same layout)</span></div>
+      {err && <div className="text-red-400 break-all">{err}</div>}
+      {current ? (
+        <>
+          <div className="flex flex-wrap items-center gap-2">
+            <span>This card follows <span className="text-accent">{current.name}</span></span>
+            <span className="text-muted">ties: {current.ties.join(", ") || "none"}{current.label ? ` · lines: ${current.label}` : ""}</span>
+            <button onClick={() => onUse(current)} className="text-accent hover:underline">use its symmetry</button>
+            <button onClick={onClear} className="text-muted hover:text-red-400">stop following</button>
+          </div>
+          {current.pooled && (
+            <div className="text-muted">Pooled over {current.pooled.marks} marks: perfect cut {P(current.pooled)} mm · bottom − top {fmt(current.pooled.bottom_minus_top_mm)} ·
+              L+R {fmt(current.pooled.lr_total_mm)} · T+B {fmt(current.pooled.tb_total_mm)}</div>
+          )}
+          <table className="text-[11px]">
+            <thead><tr className="text-muted text-left"><th className="pr-3">member card</th><th className="pr-3">marks</th><th className="pr-3">L+R</th><th className="pr-3">T+B</th><th className="pr-3">bottom − top</th><th>template</th></tr></thead>
+            <tbody>{current.members.map((m) => {
+              const st = m.marks_stats, pl = current.pooled;
+              const off = (a?: number, b?: number) => (a != null && b != null && Math.abs(a - b) > 0.2 ? "text-amber-300" : "");
+              return (
+                <tr key={m.card_id}>
+                  <td className="pr-3"><Link to={`?card=${m.card_id}`} className="hover:text-accent">{m.card_name}</Link> <span className="text-muted">#{m.card_number}</span></td>
+                  <td className="pr-3">{st?.marks ?? 0}</td>
+                  <td className={`pr-3 font-mono ${off(st?.lr_total_mm, pl?.lr_total_mm)}`}>{fmt(st?.lr_total_mm)}</td>
+                  <td className={`pr-3 font-mono ${off(st?.tb_total_mm, pl?.tb_total_mm)}`}>{fmt(st?.tb_total_mm)}</td>
+                  <td className={`pr-3 font-mono ${off(st?.bottom_minus_top_mm, pl?.bottom_minus_top_mm)}`}>{fmt(st?.bottom_minus_top_mm)}</td>
+                  <td className="text-muted">{m.template_status ?? "none"}</td>
+                </tr>
+              );
+            })}</tbody>
+          </table>
+          <div className="text-muted">Amber: more than 0.2 mm from the pool. A card that's off on bottom − top probably isn't the same layout.</div>
+        </>
+      ) : (
+        <div className="space-y-2">
+          {mine.filter((p) => p.relation === "suggested").map((p) => (
+            <div key={p.id}>Suggested: <span className="text-accent">{p.name}</span> <span className="text-muted">({p.ties.join(", ") || "no ties"})</span>
+              <button onClick={() => join(p)} className="ml-2 text-accent hover:underline">add this card</button></div>
+          ))}
+          {all.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1">add to
+              <select onChange={(e) => { const p = all.find((x) => x.id === Number(e.target.value)); if (p) join(p); }} defaultValue=""
+                className="bg-bg border border-border rounded px-1">
+                <option value="" disabled>a profile…</option>
+                {all.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select></div>
+          )}
+          <div className="flex flex-wrap items-center gap-1">or save this card's symmetry as a new profile:
+            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Gold frame, L=R=T, deep bottom" className="bg-bg border border-border rounded px-1 w-56" />
+            <span className="text-muted">suggest for rarities</span>
+            <input value={rar} onChange={(e) => setRar(e.target.value)} placeholder="Overnumbered, Promo" className="bg-bg border border-border rounded px-1 w-36" />
+            <span className="text-muted">sets</span>
+            <input value={sets} onChange={(e) => setSets(e.target.value)} className="bg-bg border border-border rounded px-1 w-24" />
+            <button disabled={!name.trim()} onClick={create} className="text-accent hover:underline disabled:opacity-40">save profile</button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
