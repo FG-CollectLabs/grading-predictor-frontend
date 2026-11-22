@@ -20,6 +20,7 @@ import type {
   CenteringMeasurement,
   CardTemplate,
   TemplateAnnotation,
+  LayoutProfile,
   DefineTemplate,
   BorderlessCard,
   CenteringAction,
@@ -397,6 +398,10 @@ export const api = {
   activateTemplate: (cardId: number) => post<{ status: string; remeasuring: number }>(`/v1/templates/front/${cardId}/activate`, {}),
   deactivateTemplate: (cardId: number) => post<{ status: string; remeasuring: number }>(`/v1/templates/front/${cardId}/deactivate`, {}),
   deleteTemplate: (cardId: number) => send<{ deleted: boolean; remeasuring: number }>("DELETE", `/v1/templates/front/${cardId}`),
+  listProfiles: (p: Record<string, string>) => get<{ profiles: LayoutProfile[] }>(`/v1/layout-profiles?${new URLSearchParams(p).toString()}`),
+  putProfile: (body: { id?: number; game: string; name: string; label?: string; ties: string[]; card_ids: number[]; rarities: string[]; set_codes: string[]; by?: string }) =>
+    send<LayoutProfile>("PUT", `/v1/layout-profiles`, body),
+  deleteProfile: (id: number) => send<{ deleted: boolean }>("DELETE", `/v1/layout-profiles/${id}`),
   listAnnotations: (cardId: number) => get<{ annotations: TemplateAnnotation[] }>(`/v1/templates/front/${cardId}/annotations`),
   putAnnotation: (cardId: number, copyId: number, body: { image_id: number; outer_quad: Quad; gaps_mm: InnerMM; by?: string }) =>
     send<{ saved: boolean }>("PUT", `/v1/templates/front/${cardId}/annotations/${copyId}`, body),
