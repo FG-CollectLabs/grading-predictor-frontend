@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import { TemplatesNav } from "./TemplatesHome";
 import { api, imageUrl } from "../api";
 import AuthImg from "../components/AuthImg";
 import CenteringEditor, { warp } from "../components/CenteringEditor";
@@ -71,11 +72,7 @@ export default function FrameTemplates() {
   const rows = (cands ?? []).filter((c) => filter === "all" || bucket(c.id) === filter);
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-2 text-xs text-muted">
-        <Link to="/factory" className="hover:text-accent">← Pre-grading factory</Link><span className="text-border">/</span>
-        <Link to="/factory/templates" className="hover:text-accent">Card templates</Link><span className="text-border">/</span>
-        <span className="text-[#e6edf3]">Frame templates (borderless)</span>
-      </div>
+      <TemplatesNav />
       <p className="text-xs text-muted max-w-4xl">
         For cards without a printed border (Riftbound's alt arts, overnumbered, signatures): pick a reference copy and confirm
         its cut, place a frame of reference on the design, and check it on cherry-picked copies. Nothing is measured with it

@@ -186,9 +186,9 @@ export default function CopyReview() {
       try {
         const q = await api.getTemplateQueue(0, 100);
         const next = q.items.find((t) => t.copy_id !== copyId && !skipped.has(t.copy_id));
-        navigate(next ? `/copies/${next.copy_id}?queue=templates&station=front` : "/factory/templates");
+        navigate(next ? `/copies/${next.copy_id}?queue=templates&station=front` : "/templates/queue");
       } catch {
-        navigate("/factory/templates");
+        navigate("/templates/queue");
       }
       return;
     }

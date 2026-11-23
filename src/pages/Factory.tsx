@@ -56,11 +56,7 @@ export default function Factory() {
       <div className="flex flex-wrap items-baseline gap-3">
         <h1 className="text-lg font-semibold">Pre-grading factory</h1>
         <span className="text-xs text-muted">
-          {n(needsYou)} station checks need you · <Link to="/factory/history" className="text-accent hover:underline">my review history →</Link>
-          {" · "}<Link to="/factory/priority" className="text-accent hover:underline">what to review next →</Link>
-          {" · "}<Link to="/factory/raw" className="text-accent hover:underline">raw copies (tracker) →</Link>
-          {" · "}<Link to="/factory/auto" className="text-accent hover:underline">automatic decisions →</Link>
-          {" · "}<Link to="/factory/batch" className="text-accent hover:underline">batch scans →</Link>
+          <span className={needsYou ? "text-red-400" : ""}>{n(needsYou)} station checks need you</span>
           {asOf && <> · numbers as of {asOf} (refreshed every few minutes; links show exact lists)</>}
         </span>
         <button onClick={refresh} disabled={refreshing}
@@ -91,7 +87,7 @@ export default function Factory() {
         <Feeder title="Card templates (best reviews)" lines={[
           "one validated front per card",
           "re-measures every copy of that card",
-        ]} link={["set templates", "/factory/templates"]} />
+        ]} link={["templates by set", "/templates"]} />
         {stats.references && (
           <Feeder title="Reference images (backfill)" lines={[
             `${n(stats.references.missing)} cards missing one`,

@@ -62,6 +62,12 @@ export default function CopyOdds({ copyId, refreshKey }: { copyId: number; refre
       {!p ? <div className="text-muted text-[10px]">loading…</div>
         : p.status === "measuring" ? <div className="text-yellow text-[10px]">Still measuring.</div>
         : p.status === "unmeasurable" ? <div className="text-red-400 text-[10px]">No usable outline on one side: fix the outlines to get odds.</div>
+        : p.status === "needs_manual_centering" ? (
+          <div className="rounded border border-amber-600/60 bg-amber-900/20 px-2 py-1.5 text-[11px] space-y-1">
+            <div className="font-semibold text-amber-300">Needs manual centering: no PSA odds until you check the outline and border lines</div>
+            <ul className="list-disc pl-4 text-amber-100/80">{(p.centering_check?.reasons ?? []).map((r) => <li key={r}>{r}</li>)}</ul>
+            <div className="text-muted">Accept or adjust the flagged side's centering below; the odds come back as soon as you do.</div>
+          </div>)
         : (p.predictions ?? []).map((g) => (
           <div key={g.grader} className="space-y-0.5">
             {lines(g).map((l, i) => {
