@@ -166,7 +166,7 @@ export default function CopyReview() {
   const prefetched = useRef<Promise<CopyList | null> | null>(null);
   useEffect(() => {
     const p = listParams();
-    prefetched.current = focusStation && p.get("queue") !== "templates" ? api.listCopies(p).catch(() => null) : null;
+    prefetched.current = focusStation && !["templates", "set-templates"].includes(p.get("queue") ?? "") ? api.listCopies(p).catch(() => null) : null;
   }, [listParams, copyId, focusStation]);
 
   const goNext = useCallback(async (skipThis = false) => {
@@ -177,6 +177,22 @@ export default function CopyReview() {
     if (skipThis) {
       skipped.add(copyId);
       sessionStorage.setItem("skippedCopies", JSON.stringify([...skipped].slice(-500)));
+    }
+    // a set's templates (Templates → a set): the next card in that set still
+    // without a template, then back to the set
+    if (p.get("queue") === "set-templates") {
+      skipped.add(copyId);
+      sessionStorage.setItem("skippedCopies", JSON.stringify([...skipped].slice(-500)));
+      const game = p.get("game") ?? "pokemon", set = p.get("set") ?? "";
+      const back = `/templates/set/${game}/${encodeURIComponent(set)}`;
+      try {
+        const cards = await api.templateSetCoverage(game, set);
+        const next = cards.find((c) => !c.template_status && c.review_copy_id && c.review_copy_id !== copyId && !skipped.has(c.review_copy_id));
+        navigate(next ? `/copies/${next.review_copy_id}?queue=set-templates&game=${game}&set=${encodeURIComponent(set)}&station=front` : back);
+      } catch {
+        navigate(back);
+      }
+      return;
     }
     // template queue: the next card whose first validated front fixes the most copies
     if (p.get("queue") === "templates") {
