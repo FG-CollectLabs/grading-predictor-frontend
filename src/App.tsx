@@ -13,6 +13,8 @@ import ReviewHistory from "./pages/ReviewHistory";
 import References from "./pages/References";
 import Templates from "./pages/Templates";
 import FrameTemplates from "./pages/FrameTemplates";
+import TemplatesHome, { TemplatesSet } from "./pages/TemplatesHome";
+import { FactoryShell } from "./components/FactoryNav";
 import Scans from "./pages/Scans";
 import { BatchScans, BatchView } from "./pages/BatchScans";
 import RawCopies from "./pages/RawCopies";
@@ -35,6 +37,7 @@ import PhotoError from "./pages/PhotoError";
 const TABS: { label: string; to: string; match: (p: string) => boolean; soon?: boolean }[] = [
   { label: "Analytics", to: "/", match: (p) => p === "/" || p.startsWith("/games") || p.startsWith("/sets") || p.startsWith("/cards") || p.startsWith("/certs") || p.startsWith("/intake") },
   { label: "Pre-grading factory", to: "/factory", match: (p) => p.startsWith("/factory") || p.startsWith("/copies") },
+  { label: "Templates", to: "/templates", match: (p) => p.startsWith("/templates") },
   { label: "Grader analytics", to: "/grader-analytics", match: (p) => p.startsWith("/grader-analytics") },
   { label: "Developer", to: "/developer", match: (p) => p.startsWith("/developer") },
   { label: "Settings", to: "/settings", match: (p) => p.startsWith("/settings") },
@@ -86,6 +89,12 @@ function Header() {
   );
 }
 
+// a redirect that keeps the ?query (old template links: ?card=…)
+function KeepQuery({ to }: { to: string }) {
+  const { search } = useLocation();
+  return <Navigate to={`${to}${search}`} replace />;
+}
+
 function CertRedirect() {
   const { id } = useParams<{ id: string }>();
   return <Navigate to={`/copies/${id}`} replace />;
@@ -110,17 +119,22 @@ export default function App() {
             {/* a copy's page is the factory review (validate / adjust each step) */}
             <Route path="/certs/:id" element={<CertRedirect />} />
             <Route path="/certs/:id/legacy" element={<CertView />} />
-            <Route path="/factory" element={<Factory />} />
-            <Route path="/factory/history" element={<ReviewHistory />} />
-            <Route path="/factory/references" element={<References />} />
-            <Route path="/factory/templates" element={<Templates />} />
-            <Route path="/factory/templates/frame" element={<FrameTemplates />} />
-            <Route path="/factory/scans" element={<Scans />} />
-            <Route path="/factory/batch" element={<BatchScans />} />
-            <Route path="/factory/batch/:id" element={<BatchView />} />
-            <Route path="/factory/raw" element={<RawCopies />} />
-            <Route path="/factory/auto" element={<AutoActions />} />
-            <Route path="/factory/priority" element={<ReviewPriority />} />
+            <Route path="/factory" element={<FactoryShell><Factory /></FactoryShell>} />
+            <Route path="/factory/history" element={<FactoryShell><ReviewHistory /></FactoryShell>} />
+            <Route path="/factory/references" element={<FactoryShell><References /></FactoryShell>} />
+            <Route path="/templates" element={<TemplatesHome />} />
+            <Route path="/templates/set/:game/:code" element={<TemplatesSet />} />
+            <Route path="/templates/frame" element={<FrameTemplates />} />
+            <Route path="/templates/queue" element={<Templates />} />
+            {/* old addresses */}
+            <Route path="/factory/templates" element={<KeepQuery to="/templates/queue" />} />
+            <Route path="/factory/templates/frame" element={<KeepQuery to="/templates/frame" />} />
+            <Route path="/factory/scans" element={<FactoryShell><Scans /></FactoryShell>} />
+            <Route path="/factory/batch" element={<FactoryShell><BatchScans /></FactoryShell>} />
+            <Route path="/factory/batch/:id" element={<FactoryShell><BatchView /></FactoryShell>} />
+            <Route path="/factory/raw" element={<FactoryShell><RawCopies /></FactoryShell>} />
+            <Route path="/factory/auto" element={<FactoryShell><AutoActions /></FactoryShell>} />
+            <Route path="/factory/priority" element={<FactoryShell><ReviewPriority /></FactoryShell>} />
             <Route path="/copies" element={<Copies />} />
             <Route path="/copies/:id" element={<CopyReview />} />
             <Route path="/grader-analytics" element={<GraderAnalytics />} />

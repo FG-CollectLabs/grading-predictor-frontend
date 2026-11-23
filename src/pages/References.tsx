@@ -37,11 +37,7 @@ export default function References() {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-2 text-xs text-muted">
-        <Link to="/factory" className="hover:text-accent">← Pre-grading factory</Link>
-        <span className="text-border">/</span>
-        <span className="text-[#e6edf3]">Reference images</span>
-      </div>
+      <h1 className="text-sm font-semibold">Reference images</h1>
       <p className="text-xs text-muted max-w-4xl">
         Cards the market tracker has no stock image for. The card ID machine can't recognise their listing photos and
         centering has nothing to align to, so their copies pile up in "needs you". The finder fills what it can from

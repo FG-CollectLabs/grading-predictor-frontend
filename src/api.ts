@@ -19,6 +19,8 @@ import type {
   ReviewRequest,
   CenteringMeasurement,
   CardTemplate,
+  SetCoverage,
+  CardCoverage,
   TemplateAnnotation,
   LayoutProfile,
   DefineTemplate,
@@ -392,6 +394,9 @@ export const api = {
   getReviewHistory: (limit = 100, offset = 0) => get<{ events: ReviewEvent[] }>(`/v1/review-history?limit=${limit}&offset=${offset}`),
   getCentering: (id: number) => get<{ measurements: CenteringMeasurement[] }>(`/v1/copies/${id}/centering`),
   // defined card templates (frame templates for borderless cards)
+  templateCoverage: (game: string) => get<{ total: SetCoverage; sets: SetCoverage[] }>(`/v1/templates/coverage?game=${encodeURIComponent(game)}`),
+  templateSetCoverage: (game: string, set: string) =>
+    get<{ cards: CardCoverage[] }>(`/v1/templates/coverage?game=${encodeURIComponent(game)}&set=${encodeURIComponent(set)}`).then((r) => r.cards),
   listTemplates: (p: Record<string, string>) =>
     get<{ templates: CardTemplate[]; count: number }>(`/v1/templates?${new URLSearchParams(p).toString()}`),
   /** which cards of a game have which front template (key = card id) */

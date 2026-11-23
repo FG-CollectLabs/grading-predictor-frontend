@@ -582,7 +582,9 @@ export interface CenteringAnalytics {
 }
 export interface CenteringOdds { off_center: OffCenter; predictions: GraderPrediction[] | null; caveats: string[] }
 export interface Prediction {
-  copy_id: number; card_id: number; status: "measuring" | "ready" | "unmeasurable";
+  copy_id: number; card_id: number; status: "measuring" | "ready" | "unmeasurable" | "needs_manual_centering";
+  // outlines or border lines badly off (AI outline check, card template): no odds until a person reviews
+  centering_check?: { status: "ok" | "needs_manual_centering"; reasons: string[]; sides: Record<string, string[]>; ai_outline: string };
   centering: Partial<Record<"front" | "back", PredictSide>>;
   worse_side?: { front: number; back: number }; off_center?: OffCenter;
   predictions?: GraderPrediction[]; comparables?: Record<string, number>; caveats: string[];
@@ -814,4 +816,12 @@ export interface LayoutProfile {
   created_by: string; updated_at: string; pooled: ProfileStats | null; relation?: "member" | "suggested";
   members: { card_id: number; card_name: string; card_number: string; set_name: string; rarity: string | null; marks_stats: ProfileStats | null;
     template_status: string | null; template_nominal_mm: TemplateSides | null }[];
+}
+export interface SetCoverage {
+  set_code: string; set_name: string; release_date: string | null; logo: string | null;
+  cards: number; active: number; in_progress: number; frame: number; copies: number; copies_without_template: number;
+}
+export interface CardCoverage {
+  card_id: number; card_name: string; card_number: string; rarity: string | null; image_url: string | null; copies: number;
+  template_status: string | null; template_mode: string | null; profile_id: number | null; template_updated_at: string | null;
 }

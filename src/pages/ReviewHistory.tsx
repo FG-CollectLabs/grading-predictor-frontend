@@ -39,11 +39,7 @@ export default function ReviewHistory() {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-2 text-xs text-muted">
-        <Link to="/factory" className="hover:text-accent">← Pre-grading factory</Link>
-        <span className="text-border">/</span>
-        <span className="text-[#e6edf3]">Review history</span>
-      </div>
+      <h1 className="text-sm font-semibold">Review history</h1>
       <div className="text-xs text-muted">Every decision you've made, newest first. Open a copy to redo any step; the earlier decision stays here.</div>
       {err && <div className="text-red-400 text-xs">{err}</div>}
       {groups.length === 0 && !err && <div className="text-muted text-xs py-8">No review decisions yet.</div>}

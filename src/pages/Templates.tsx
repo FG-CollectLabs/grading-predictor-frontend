@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { TemplatesNav } from "./TemplatesHome";
 import { api } from "../api";
 import type { TemplateTask } from "../types";
 
@@ -15,17 +16,14 @@ export default function Templates() {
   const first = items?.[0];
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-2 text-xs text-muted">
-        <Link to="/factory" className="hover:text-accent">← Pre-grading factory</Link><span className="text-border">/</span>
-        <span className="text-[#e6edf3]">Card templates</span>
-      </div>
+      <TemplatesNav />
       <p className="text-xs text-muted max-w-4xl">
         A card's first front you validate becomes its template: every other copy of that card is then measured by aligning
         its print to that one, and moves to "auto-passed · high". {total.toLocaleString()} cards don't have one yet; the
         top of this list fixes the most copies per review. Take care with the first one of each card: put the corners
         on the cut edge and the lines on the border exactly.
       </p>
-      <Link to="/factory/templates/frame" className="block text-xs text-accent hover:underline">
+      <Link to="/templates/frame" className="block text-xs text-accent hover:underline">
         Borderless cards (Riftbound): set up a frame template for a card →</Link>
       {first && (
         <Link to={`/copies/${first.copy_id}?queue=templates&station=front`}
