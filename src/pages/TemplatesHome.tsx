@@ -151,7 +151,10 @@ export function TemplatesSet() {
                 <td>
                   {borderless || c.template_mode === "frame"
                     ? <Link to={`/templates/frame?card=${c.card_id}`} className="text-accent hover:underline">{st ? "open" : "set up"} →</Link>
-                    : !st ? <Link to={`/templates/queue`} className="text-accent hover:underline">review a front →</Link> : null}
+                    : !st && c.review_copy_id
+                      ? <Link to={`/copies/${c.review_copy_id}?queue=set-templates&game=${game}&set=${encodeURIComponent(code)}&station=front`}
+                          className="text-accent hover:underline" title="review this card's front: once accepted or adjusted it becomes the card's template">review a front →</Link>
+                      : !st ? <Link to={`/cards/${c.card_id}`} className="text-muted hover:text-accent" title="no engine front to review yet">open card →</Link> : null}
                 </td>
               </tr>
             );
@@ -160,8 +163,9 @@ export function TemplatesSet() {
       )}
       {!borderless && (
         <p className="text-[11px] text-muted max-w-4xl">
-          Pokémon cards learn a border template from the first front you accept or adjust; the review queue lists the cards
-          where that does the most. Borderless Pokémon cards can use the borderless editor too.
+          Pokémon cards learn a border template from the first front you accept or adjust: "review a front" opens that card's
+          best copy, and after you save it moves to the next card in this set that still needs one. Borderless Pokémon cards
+          can use the borderless editor too.
         </p>
       )}
     </div>

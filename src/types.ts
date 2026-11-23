@@ -824,4 +824,5 @@ export interface SetCoverage {
 export interface CardCoverage {
   card_id: number; card_name: string; card_number: string; rarity: string | null; image_url: string | null; copies: number;
   template_status: string | null; template_mode: string | null; profile_id: number | null; template_updated_at: string | null;
+  review_copy_id: number | null; // the card's least doubtful engine front, to review for its template
 }
