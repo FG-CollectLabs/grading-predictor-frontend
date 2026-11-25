@@ -662,6 +662,12 @@ export type ConditionFindings = Partial<Record<"front" | "back", Partial<Record<
 export interface ConditionReview {
   id: number; placed_by: string; findings: ConditionFindings; corners_clean: boolean | null; edges_clean: boolean | null;
   photo_ok: boolean | null; confidence: number | null; note: string | null; created_at: string;
+  marks?: ConditionMark[];
+}
+// where an issue is: a circle on that part's inspection tile (fractions: x, r of its width, y of its height)
+export interface ConditionMark {
+  side: "front" | "back"; kind: "corners" | "edges"; part: string; issue?: string; severity?: string;
+  x: number; y: number; r: number; note?: string;
 }
 
 // ── batch scans (many loose cards per flatbed sheet) ──

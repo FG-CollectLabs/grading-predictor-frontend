@@ -3,6 +3,7 @@ import { api, imageUrl } from "../api";
 import type { CenteringMeasurement, CornerGrades, InnerMM, Quad } from "../types";
 import CornerZoom from "./CornerZoom";
 import { fitCorners, type CornerFitJS } from "../lib/corners";
+import { OverlayToggle, useOverlays } from "../lib/overlays";
 
 // Review / adjust one photo's centering measurement.
 //
@@ -200,6 +201,7 @@ export default function CenteringEditor({
   saveTo?: (outer_quad: Quad, inner_mm: InnerMM) => Promise<void>;
 }) {
   const current = currentMeasurement(measurements);
+  const [showLines] = useOverlays(); // off: the photo as it is, no lines
   const [src, setSrc] = useState<ImageData | null>(null);
   const [imgErr, setImgErr] = useState<string | null>(null);
   const [quad, setQuad] = useState<Quad | null>(null);
@@ -334,6 +336,7 @@ export default function CenteringEditor({
     ctx.setTransform(k, 0, 0, k, PHOTO_W / 2 - pv.cx * k, PHOTO_H / 2 - pv.cy * k);
     ctx.drawImage(bitmapRef.current, 0, 0);
     ctx.setTransform(1, 0, 0, 1, 0, 0);
+    if (!showLines) return;
     if (aiFix?.outer_quad) {   // the AI's fix: cyan, dotted
       const fp = aiFix.outer_quad.map(([x, y]) => toScreen(photoFit, pv, PHOTO_W, PHOTO_H, x, y));
       ctx.setLineDash([2, 3]);
@@ -369,7 +372,7 @@ export default function CenteringEditor({
       ctx.moveTo(x, y - 3); ctx.lineTo(x, y + 3);
       ctx.stroke();
     });
-  }, [src, quad, pv, photoFit, selCorner, dragCorner, aiFix]);
+  }, [src, quad, pv, photoFit, selCorner, dragCorner, aiFix, showLines]);
 
   // the straightened card
   const rectImg = useMemo(() => {
@@ -399,6 +402,7 @@ export default function CenteringEditor({
     ctx.setTransform(k / ppmm, 0, 0, k / ppmm, RECT_W / 2 - rv.cx * k, RECT_H / 2 - rv.cy * k);
     ctx.drawImage(rectBitmap, 0, 0);
     ctx.setTransform(1, 0, 0, 1, 0, 0);
+    if (!showLines) return;
     const S = (x: number, y: number) => toScreen(rectFit, rv, RECT_W, RECT_H, x, y);
     const seg: Record<Side, [number, number, number, number]> = {
       left: [inner.left, -5, inner.left, CARD_H + 5],
@@ -422,7 +426,7 @@ export default function CenteringEditor({
       }
     }
     ctx.setLineDash([]);
-  }, [rectBitmap, inner, selLine, dragLine, rv, rectFit]);
+  }, [rectBitmap, inner, selLine, dragLine, rv, rectFit, showLines]);
 
   // ── interaction: photo ─────────────────────────────────────────────────────
   const local = (e: React.PointerEvent | React.WheelEvent, el: HTMLCanvasElement) => {
@@ -611,6 +615,7 @@ export default function CenteringEditor({
     <div className="bg-surface border border-border rounded-md p-3">
       <div className="flex items-center justify-between mb-2 text-xs">
         <span className="uppercase tracking-widest text-muted text-[10px]">{side} centering</span>
+        <OverlayToggle className="ml-3 mr-auto" />
         {current ? (
           <span className="text-muted">
             {provenance(current, measurements)} · <span className={current.status === "accepted" ? "text-green" : current.status === "rejected" ? "text-red-400" : "text-yellow"}>{current.status}</span>
