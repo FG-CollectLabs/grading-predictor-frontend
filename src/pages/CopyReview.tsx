@@ -6,6 +6,7 @@ import type { CenteringMeasurement, CopyDetail, CopyList, CopyPhoto, ReviewSteps
 import CenteringEditor from "../components/CenteringEditor";
 import ConditionStep from "../components/ConditionStep";
 import AIRushButton from "../components/AIRushButton";
+import CopySummary from "../components/CopySummary";
 import CopyOdds from "../components/CopyOdds";
 import { FLAG_LABELS, StatusBadge, gradeText } from "./Copies";
 
@@ -424,6 +425,7 @@ export default function CopyReview() {
           </div>
         )}
         <AIRushButton copyId={copy.id} onDone={reloadAll} />
+        <CopySummary copy={copy} centering={centering} />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-[260px_1fr] gap-4">
