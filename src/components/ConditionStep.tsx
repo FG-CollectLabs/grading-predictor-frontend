@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../api";
 import AuthImg, { openAuthImage } from "./AuthImg";
-import type { ConditionFindings, ConditionReview, Severity, StepDecision } from "../types";
+import { OverlayToggle, useOverlays } from "../lib/overlays";
+import type { ConditionMark, ConditionFindings, ConditionReview, Severity, StepDecision } from "../types";
 
 // Steps 6 / 7: corners or edges. Both sides' inspection sheets (cut along the
 // current outlines), the AI check's findings, and a grid to confirm or
@@ -30,6 +31,7 @@ export default function ConditionStep({ kind, copyId, version, onDone }: {
   const [mine, setMine] = useState<ConditionReview | null>(null);
   const [grid, setGrid] = useState<ConditionFindings>({});
   const [note, setNote] = useState("");
+  const [marks, setMarks] = useState<ConditionMark[]>([]); // yours: circles on the tiles
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -39,6 +41,7 @@ export default function ConditionStep({ kind, copyId, version, onDone }: {
       const m = r.reviews.find((x) => x.placed_by.startsWith("user:")) ?? null;
       setAi(a);
       setMine(m);
+      setMarks((m?.marks ?? []).filter((x) => x.kind === kind));
       const base = (m?.findings?.front?.[kind] || m?.findings?.back?.[kind]) ? m : a;
       const g: ConditionFindings = {};
       for (const side of ["front", "back"] as const) {
@@ -77,7 +80,9 @@ export default function ConditionStep({ kind, copyId, version, onDone }: {
     try {
       const findings: ConditionFindings = {};
       for (const side of ["front", "back"] as const) findings[side] = { [kind]: grid[side]?.[kind] ?? {} };
-      const r = await api.postCondition(copyId, { by: "user", findings, note: note.trim() || undefined });
+      // the other kind's circles from your last review are kept
+      const other = (mine?.marks ?? []).filter((x) => x.kind !== kind);
+      const r = await api.postCondition(copyId, { by: "user", findings, note: note.trim() || undefined, marks: [...other, ...marks] });
       await onDone(agrees ? "approved" : "fixed", { condition_review: r.id, flagged });
     } catch (e) {
       setErr(String(e));
@@ -111,16 +116,24 @@ export default function ConditionStep({ kind, copyId, version, onDone }: {
           <div className="flex items-center gap-2">
             <span className="text-[10px] uppercase tracking-widest text-muted">{side}</span>
             <button onClick={() => openAuthImage(api.inspectUrl(copyId, side, version))} className="text-[10px] text-muted hover:text-accent">whole sheet ↗</button>
+            {side === "front" && <OverlayToggle className="ml-auto" />}
           </div>
           <div className={kind === "corners" ? "grid gap-2 md:grid-cols-2" : "space-y-2"}>
             {PARTS[kind].map((p) => (
               <PartRow key={p} kind={kind} side={side} part={p} src={api.inspectPartUrl(copyId, side, p, version)}
-                values={grid[side]?.[kind]?.[p] ?? {}} ai={ai?.findings?.[side]?.[kind]?.[p]} set={(iss, v) => set(side, p, iss, v)} />
+                values={grid[side]?.[kind]?.[p] ?? {}} ai={ai?.findings?.[side]?.[kind]?.[p]} set={(iss, v) => set(side, p, iss, v)}
+                aiMarks={(ai?.marks ?? []).filter((m) => m.side === side && m.kind === kind && m.part === p)}
+                myMarks={marks.filter((m) => m.side === side && m.part === p)}
+                addMark={(m) => setMarks((ms) => [...ms, { ...m, side, kind, part: p }])}
+                removeMark={(m) => setMarks((ms) => ms.filter((x) => x !== m))} />
             ))}
           </div>
         </div>
       ))}
-      <div className="text-[10px] text-muted">Underlined: the AI's call where yours differs. "unsure" = the photo can't show it.</div>
+      <div className="text-[10px] text-muted">
+        Underlined: the AI's call where yours differs. "unsure" = the photo can't show it. Circles: <span className="text-orange-300">dashed = the AI's</span>,
+        <span className="text-sky-300"> solid = yours</span> (click "+ circle", then the spot; click your circle to remove it; click the AI's to keep it as yours).
+      </div>
       <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} placeholder="note (optional): e.g. whitening on the back top-left, only visible at full size"
         className="w-full bg-bg border border-border rounded px-2 py-1 outline-none focus:border-accent" />
       <div className="flex items-center gap-2">
@@ -135,22 +148,60 @@ export default function ConditionStep({ kind, copyId, version, onDone }: {
 }
 
 // one corner or edge: its close-up next to the AI's call and yours
-function PartRow({ kind, side, part, src, values, ai, set }: {
+function PartRow({ kind, side, part, src, values, ai, set, aiMarks, myMarks, addMark, removeMark }: {
   kind: "corners" | "edges"; side: "front" | "back"; part: string; src: string;
   values: Record<string, string>; ai?: Record<string, string>; set: (issue: string, v: Severity) => void;
+  aiMarks: ConditionMark[]; myMarks: ConditionMark[];
+  addMark: (m: Omit<ConditionMark, "side" | "kind" | "part">) => void; removeMark: (m: ConditionMark) => void;
 }) {
   const [zoom, setZoom] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [size, setSize] = useState<[number, number] | null>(null);
+  const [show] = useOverlays();
+  // the issue a new circle is for: the first you've flagged here, else the first issue
+  const flaggedIssue = Object.entries(values).find(([, v]) => v !== "none")?.[0] ?? ISSUES[kind][0][0];
+  const place = (e: React.MouseEvent<HTMLElement>) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    addMark({ issue: flaggedIssue, severity: values[flaggedIssue] && values[flaggedIssue] !== "none" ? values[flaggedIssue] : undefined,
+      x: Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)), y: Math.min(1, Math.max(0, (e.clientY - r.top) / r.height)),
+      r: kind === "corners" ? 0.08 : 0.02 });
+    setAdding(false);
+  };
+  const overlay = (w: number, h: number) => show && size && (aiMarks.length > 0 || myMarks.length > 0) && (
+    <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" className="absolute inset-0 w-full h-full pointer-events-none">
+      {aiMarks.map((m, i) => (
+        <circle key={`a${i}`} cx={m.x * w} cy={m.y * h} r={m.r * w} fill="none" stroke="#fb923c" strokeWidth={Math.max(1.5, w / 160)}
+          strokeDasharray={`${w / 40} ${w / 60}`} className="pointer-events-auto cursor-pointer"
+          onClick={(e) => { e.stopPropagation(); addMark({ issue: m.issue, severity: m.severity, x: m.x, y: m.y, r: m.r }); }}>
+          <title>AI: {m.issue?.replace(/_/g, " ")} {m.severity} (click to keep as yours)</title>
+        </circle>
+      ))}
+      {myMarks.map((m, i) => (
+        <circle key={`m${i}`} cx={m.x * w} cy={m.y * h} r={m.r * w} fill="none" stroke="#38bdf8" strokeWidth={Math.max(1.5, w / 140)}
+          className="pointer-events-auto cursor-pointer" onClick={(e) => { e.stopPropagation(); removeMark(m); }}>
+          <title>yours: {m.issue?.replace(/_/g, " ")} {m.severity ?? ""} (click to remove)</title>
+        </circle>
+      ))}
+    </svg>
+  );
   const aiFlags = Object.entries(ai ?? {}).filter(([, v]) => v !== "none");
   const mineFlags = Object.values(values).filter((v) => v !== "none").length;
   const corner = kind === "corners";
   const none = "no measured outline for this side yet";
+  const onImg = (el: HTMLImageElement) => setSize([el.naturalWidth, el.naturalHeight]);
   const img = corner ? (
-    <AuthImg src={src} alt={`${side} ${label(part)}`} onClick={() => setZoom(!zoom)} title="click to enlarge" fallback={none}
-      className={`rounded bg-bg cursor-zoom-in ${zoom ? "w-[420px] max-w-full" : "w-40 h-40 object-contain"}`} />
+    <div className={`relative inline-block shrink-0 ${adding ? "cursor-crosshair" : ""}`}
+      onClick={adding ? place : undefined}>
+      <AuthImg src={src} alt={`${side} ${label(part)}`} onClick={adding ? undefined : () => setZoom(!zoom)} title={adding ? "click the spot" : "click to enlarge"} fallback={none}
+        onLoad={onImg} className={`rounded bg-bg block ${adding ? "" : "cursor-zoom-in"} ${zoom ? "w-[420px] max-w-full" : "w-40 h-40 object-contain"}`} />
+      {size && overlay(size[0], size[1])}
+    </div>
   ) : (
-    <button type="button" onClick={() => openAuthImage(src)} title="open full size" className="block w-full">
-      <AuthImg src={src} alt={`${side} ${label(part)} edge`} className="w-full min-h-[24px] rounded bg-bg" fallback={none} />
-    </button>
+    <div className={`relative w-full ${adding ? "cursor-crosshair" : ""}`} onClick={adding ? place : () => openAuthImage(src)}
+      title={adding ? "click the spot" : "open full size"}>
+      <AuthImg src={src} alt={`${side} ${label(part)} edge`} className="w-full min-h-[24px] rounded bg-bg block" fallback={none} onLoad={onImg} />
+      {size && overlay(size[0], size[1])}
+    </div>
   );
   return (
     <div className={`bg-surface border rounded p-2 ${mineFlags ? "border-yellow/50" : "border-border"} ${corner ? "flex gap-3 items-start" : "space-y-2"}`}>
@@ -160,7 +211,11 @@ function PartRow({ kind, side, part, src, values, ai, set }: {
           <span className="font-semibold">{side} · {label(part)}</span>
           <span className="text-[10px] text-muted">
             AI: {ai ? (aiFlags.length ? aiFlags.map(([k, v]) => `${k.replace("_", " ")} ${v}`).join(", ") : "clean") : "not checked"}
+            {aiFlags.length > 0 && aiMarks.length === 0 && ai ? " (no circle: checked before circles existed, or not placed)" : ""}
           </span>
+          <button type="button" onClick={() => setAdding(!adding)}
+            className={`ml-auto text-[10px] border rounded px-1.5 ${adding ? "border-sky-400 text-sky-300" : "border-border text-muted hover:text-accent"}`}>
+            {adding ? "click the spot…" : "+ circle"}</button>
         </div>
         <div className={corner ? "space-y-1" : "flex flex-wrap gap-x-4 gap-y-1"}>
           {ISSUES[kind].map(([iss, l]) => {

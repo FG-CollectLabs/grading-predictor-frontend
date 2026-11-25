@@ -1,5 +1,5 @@
 import type {
-  BatchDetail, BatchLayout, GraderReport, ReportSet, AuditCopy, AIRush, CompletionResp, InnerMM, Quad, BatchSummary, CenteringAnalytics, CenteringOdds, CardHit, SettingValue, RawFeedback, RawCalibration, ConditionReview, ConditionFindings,
+  BatchDetail, BatchLayout, GraderReport, ReportSet, AuditCopy, AIRush, CompletionResp, InnerMM, Quad, BatchSummary, CenteringAnalytics, CenteringOdds, CardHit, SettingValue, RawFeedback, RawCalibration, ConditionReview, ConditionFindings, ConditionMark,
   Card,
   CardDetail,
   CertRow,
@@ -358,7 +358,7 @@ export const api = {
   autoActions: () => get<{ categories: any[] }>(`/v1/auto-actions`),
   restoreCopy: (id: number, note = "") => post<{ restored: boolean }>(`/v1/copies/${id}/restore`, { note }),
   getCondition: (id: number) => get<{ reviews: ConditionReview[]; issues: Record<string, Record<string, boolean>>; parts: Record<string, Record<string, boolean>> }>(`/v1/copies/${id}/condition`),
-  postCondition: (id: number, body: { by: "user"; findings: ConditionFindings; photo_ok?: boolean; note?: string }) =>
+  postCondition: (id: number, body: { by: "user"; findings: ConditionFindings; photo_ok?: boolean; note?: string; marks?: ConditionMark[] }) =>
     post<{ id: number; corners_clean: boolean; edges_clean: boolean }>(`/v1/copies/${id}/condition`, body),
   /** an image from an API path that needs the sign-in (private copies such
    * as in-hand scans answer 404 without it, and <img> can't send it): fetched

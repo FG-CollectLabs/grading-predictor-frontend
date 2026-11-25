@@ -3,8 +3,9 @@ import { api } from "../api";
 
 // <img> for API images that need the sign-in (inspection sheets of private
 // copies, e.g. in-hand scans): fetched with auth, shown from a local URL.
-export default function AuthImg({ src, alt, className, onClick, title, fallback }: {
-  src: string; alt: string; className?: string; onClick?: () => void; title?: string; fallback?: string;
+export default function AuthImg({ src, alt, className, onClick, title, fallback, onLoad }: {
+  src: string; alt: string; className?: string; onClick?: (e: React.MouseEvent<HTMLImageElement>) => void; title?: string; fallback?: string;
+  onLoad?: (img: HTMLImageElement) => void;
 }) {
   const [url, setUrl] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
@@ -17,7 +18,7 @@ export default function AuthImg({ src, alt, className, onClick, title, fallback 
   }, [src]);
   if (failed) return <div className={`${className ?? ""} flex items-center justify-center text-[10px] text-muted bg-bg rounded p-2`}>{fallback ?? "image unavailable"}</div>;
   if (!url) return <div className={`${className ?? ""} bg-bg rounded animate-pulse`} />;
-  return <img src={url} alt={alt} className={className} onClick={onClick} title={title} />;
+  return <img src={url} alt={alt} className={className} onClick={onClick} title={title} onLoad={(e) => onLoad?.(e.currentTarget)} />;
 }
 
 /** open an auth-only API image in a new tab */
