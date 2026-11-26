@@ -27,7 +27,7 @@ export function useCardBands(cardId: number | undefined): CardBands | null {
     let live = true;
     api.centeringBands([cardId])
       .then((r) => { if (live) setBands(r.cards[String(cardId)]?.bands ?? r.defaults); })
-      .catch(() => { if (live) setBands({}); });
+      .catch(() => { if (live) setBands(null); }); // copies fall back to the fixed bands, the panel hides
     return () => { live = false; };
   }, [cardId]);
   return bands;
