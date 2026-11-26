@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { CenteringBandsPanel } from "../components/CenteringBands";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { api } from "../api";
 import type {
@@ -186,6 +187,8 @@ export default function CardDetail() {
           </div>
         )}
       </div>
+
+      <CenteringBandsPanel cardId={cardId} />
 
       {/* Market data panel */}
       <MarketPanel

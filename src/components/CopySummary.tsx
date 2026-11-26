@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
 import { currentMeasurement } from "./CenteringEditor";
-import type { CenteringMeasurement, ConditionReview, CopyDetail } from "../types";
+import { bandTitle, bandTone, useCardBands } from "./CenteringBands";
+import type { BandAxis, CardBands, CenteringMeasurement, ConditionReview, CopyDetail } from "../types";
 
 // The copy's readings at a glance, under its name: centering per side,
 // corners, edges, surface, each with who stands behind it: you, the AI, the
@@ -29,9 +30,8 @@ function centeringTrust(m: CenteringMeasurement | null, station?: string): Trust
 }
 
 const ratio = (v: number | null | undefined) => (v == null ? "–" : `${v.toFixed(1)}/${(100 - v).toFixed(1)}`);
-const off = (v: number | null | undefined) => (v == null ? 0 : Math.abs(v - 50));
-// PSA 10 front tolerance is about 55/45: green inside 53/47, amber to 55/45, red beyond
-const tone = (v: number | null | undefined) => (v == null ? "text-muted" : off(v) <= 3 ? "text-emerald-300" : off(v) <= 5 ? "text-amber-300" : "text-red-300");
+// colors: this card's PSA 10 bands (green: not noticed, amber: noticed but
+// still a 10, red: no 10), the same bands the market tracker uses
 
 function Badge({ t, title }: { t: Trust; title?: string }) {
   const [l, c] = TRUST[t];
@@ -75,6 +75,7 @@ function conditionOf(reviews: ConditionReview[] | null, kind: "corners" | "edges
 
 export default function CopySummary({ copy, centering }: { copy: CopyDetail; centering: CenteringMeasurement[] }) {
   const [reviews, setReviews] = useState<ConditionReview[] | null>(null);
+  const bands: CardBands | null = useCardBands(copy.card_id);
   useEffect(() => {
     api.getCondition(copy.id).then((r) => setReviews(r.reviews)).catch(() => setReviews([]));
   }, [copy.id, centering]);
@@ -85,14 +86,15 @@ export default function CopySummary({ copy, centering }: { copy: CopyDetail; cen
   const worst = order.find((t) => t === ft || t === bt) ?? "none";
   const corners = conditionOf(reviews, "corners", copy.stations?.corners);
   const edges = conditionOf(reviews, "edges", copy.stations?.edges);
-  const CRow = ({ label, m, t }: { label: string; m: CenteringMeasurement | null; t: Trust }) => (
+  const psa = (a: BandAxis) => bands?.psa_10?.[a];
+  const CRow = ({ label, m, t }: { label: "front" | "back"; m: CenteringMeasurement | null; t: Trust }) => (
     <div className="flex items-baseline gap-2 text-sm font-mono">
       <span className="text-[10px] text-muted w-9">{label}</span>
       {m && m.status !== "rejected" ? (
         <>
-          <span className={tone(m.lr_left_pct)} title="left / right">{ratio(m.lr_left_pct)}</span>
+          <span className={bandTone(m.lr_left_pct, psa(`${label}_lr`), `${label}_lr`)} title={`left / right · ${bandTitle(psa(`${label}_lr`), `${label}_lr`)}`}>{ratio(m.lr_left_pct)}</span>
           <span className="text-muted text-[10px]">L/R</span>
-          <span className={tone(m.tb_top_pct)} title="top / bottom">{ratio(m.tb_top_pct)}</span>
+          <span className={bandTone(m.tb_top_pct, psa(`${label}_tb`), `${label}_tb`)} title={`top / bottom · ${bandTitle(psa(`${label}_tb`), `${label}_tb`)}`}>{ratio(m.tb_top_pct)}</span>
           <span className="text-muted text-[10px]">T/B</span>
         </>
       ) : <span className="text-muted text-xs">{m ? "can't measure" : "not measured yet"}</span>}

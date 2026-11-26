@@ -832,3 +832,24 @@ export interface CardCoverage {
   template_status: string | null; template_mode: string | null; profile_id: number | null; template_updated_at: string | null;
   review_copy_id: number | null; // the card's least doubtful engine front, to review for its template
 }
+
+/** one axis's centering band, as the bigger side of the split (52.5 = 52.5/47.5) */
+export interface CenteringBand {
+  ok_max: number;
+  noticed_max: number;
+  level: "card" | "set_rarity" | "set" | "era" | "all";
+  label: string;
+  n: number;
+  n_top: number;
+}
+export type BandTarget = "psa_10" | "cgc_10_or_better" | "cgc_pristine";
+export type BandAxis = "front_lr" | "front_tb" | "back_lr" | "back_tb";
+export type CardBands = Partial<Record<BandTarget, Record<BandAxis, CenteringBand>>>;
+export interface CenteringBandsResponse {
+  as_of: string;
+  computed_at: string;
+  targets: Record<BandTarget, string>;
+  cards: Record<string, { card_id: number; market_display_key: string | null; bands: CardBands }>;
+  defaults: CardBands;
+  notes: string[];
+}
