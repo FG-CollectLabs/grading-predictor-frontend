@@ -43,6 +43,7 @@ import type {
   StepDecision,
   InfraSummary,
   Setting,
+  CenteringBandsResponse,
 } from "./types";
 
 import { authReady, idToken } from "./lib/auth";
@@ -394,6 +395,7 @@ export const api = {
   getReviewHistory: (limit = 100, offset = 0) => get<{ events: ReviewEvent[] }>(`/v1/review-history?limit=${limit}&offset=${offset}`),
   getCentering: (id: number) => get<{ measurements: CenteringMeasurement[] }>(`/v1/copies/${id}/centering`),
   // defined card templates (frame templates for borderless cards)
+  centeringBands: (cardIds: number[]) => get<CenteringBandsResponse>(`/v1/centering/bands?card_ids=${cardIds.join(",")}`),
   templateCoverage: (game: string) => get<{ total: SetCoverage; sets: SetCoverage[] }>(`/v1/templates/coverage?game=${encodeURIComponent(game)}`),
   templateSetCoverage: (game: string, set: string) =>
     get<{ cards: CardCoverage[] }>(`/v1/templates/coverage?game=${encodeURIComponent(game)}&set=${encodeURIComponent(set)}`).then((r) => r.cards),
